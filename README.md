@@ -29,8 +29,8 @@ or just retype it.
 ## Install
 
 ```
-/plugin marketplace add kakhramon/redpen
-/plugin install redpen@redpen
+/plugin marketplace add kakhramon/prompt-redpen
+/plugin install redpen@prompt-redpen
 ```
 
 Then start a new session. Run `/hooks` to see the one hook it registers, and
@@ -223,7 +223,7 @@ Tune the regexes at the top of `plugins/redpen/scripts/redpen.py`:
 | Skip one prompt | start it with `raw:` |
 | Turn it off for a shell session | `export REDPEN_MODE=off` |
 | Turn it off everywhere | `/redpen:mode off` |
-| Uninstall | `/plugin uninstall redpen@redpen` |
+| Uninstall | `/plugin uninstall redpen@prompt-redpen` |
 | See what it's doing | `export REDPEN_DEBUG=1`, then read `debug.log` in the plugin data dir |
 
 `/`, `#` and `!` prefixed input always passes straight through.
@@ -271,7 +271,7 @@ tell anyone about it.
 
 To ship an update, bump `version` in
 `plugins/redpen/.claude-plugin/plugin.json` and push. Users get it on
-`/plugin marketplace update redpen`.
+`/plugin marketplace update prompt-redpen`.
 
 ## Known rough edges
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "redpen",
+  "name": "prompt-redpen",
   "description": "Reviews your prompt before Claude sees it: rewrites the vague ones, flags a model or effort level that does not fit the work, and strips credentials.",
   "owner": {
     "name": "kahero",
@@ -12,7 +12,14 @@
       "source": "./plugins/redpen",
       "description": "A red pen for your prompts. Catches vague asks before they cost a turn, tells you when the task does not match the model or effort you are on, and refuses to let an API key reach the model.",
       "category": "productivity",
-      "keywords": ["prompt", "tokens", "cost", "model-selection", "secrets", "hooks"]
+      "keywords": [
+        "prompt",
+        "tokens",
+        "cost",
+        "model-selection",
+        "secrets",
+        "hooks"
+      ]
     }
   ]
 }
