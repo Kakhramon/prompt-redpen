@@ -1,11 +1,45 @@
-# redpen
+<h1 align="center">redpen</h1>
 
-A Claude Code plugin that reads your prompt before Claude does.
+<p align="center">
+  <em>Hands it back before you've spent anything on it.</em>
+</p>
 
-If the prompt is too vague to act on, it stops the turn, shows you a rewritten
-version, and waits. Reply `ok` and the refined version goes through. If the task
-doesn't match the model or effort level you're on, it says so before you spend
-the tokens.
+<p align="center">
+  <a href="https://github.com/kakhramon/prompt-redpen/stargazers"><img src="https://img.shields.io/github/stars/kakhramon/prompt-redpen?style=flat-square&color=b3261e&label=stars" alt="Stars"></a>
+  <a href="https://github.com/kakhramon/prompt-redpen/releases"><img src="https://img.shields.io/github/v/release/kakhramon/prompt-redpen?style=flat-square&color=b3261e&label=release" alt="Release"></a>
+  <a href="https://github.com/kakhramon/prompt-redpen/actions/workflows/validate.yml"><img src="https://img.shields.io/github/actions/workflow/status/kakhramon/prompt-redpen/validate.yml?style=flat-square&color=b3261e&label=checks" alt="Checks"></a>
+  <img src="https://img.shields.io/github/last-commit/kakhramon/prompt-redpen?style=flat-square&color=b3261e&label=updated" alt="Last commit">
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-b3261e?style=flat-square" alt="Claude Code plugin">
+  <img src="https://img.shields.io/badge/license-MIT-b3261e?style=flat-square" alt="MIT license">
+</p>
+
+---
+
+You remember the teacher. The one who went through your spelling with a red pen
+and handed it back looking like a crime scene. You hated it. You also stopped
+spelling it *recieve*.
+
+Then you left school and mostly stopped writing. For years the longest thing you
+wrote was a commit message.
+
+Now look at you. You write prompts all day. You have typed more words this month
+than you handed in during five years of school, and not one of them gets marked.
+The marking was the part that worked.
+
+So: a red pen, for prompts.
+
+Not to grade your English. To stop the turn that was about to be wasted, which in
+this era costs money rather than a Saturday: the ask too vague to act on, the
+rename you are paying a reasoning model to do, the API key you just pasted into
+the chat.
+
+## Before / after
+
+You type `fix it`. Your agent reads six files, picks the bug it thinks you meant,
+changes that one, and asks you to confirm. Two minutes and a few thousand tokens
+later you find out it guessed wrong.
+
+With redpen:
 
 ```
 > fix it
@@ -26,6 +60,8 @@ Reply  ok  to send the refined version, no  to send yours unchanged,
 or just retype it.
 ```
 
+Nothing was sent. The turn has not started yet.
+
 ## Install
 
 ```
@@ -41,6 +77,56 @@ Requires Python 3.8+ on `PATH` as `python3`. On Windows, change `python3` to
 
 The default mode blocks and waits. If you would rather be warned than stopped,
 run `/redpen:mode lite` once and it stays that way.
+
+## Using it
+
+There is nothing to run. Type as you always did; redpen only speaks up when it
+has something to say, which on most prompts is never.
+
+**When it stops you**, you have three replies:
+
+| you type | what happens |
+|---|---|
+| `ok` | the refined version is sent instead of yours |
+| `no` | your original is sent, unchanged |
+| anything else | treated as a fresh prompt, so just retype it properly |
+
+The one exception is a prompt that contained a credential. There `no` is refused,
+because the original was erased rather than kept, and `ok` sends the redacted
+version.
+
+**When it only nudges you**, nothing is blocked. A line like `You are on fable;
+this task looks lighter - consider /model sonnet` is advice. Switch with
+`/model` if you agree, or carry on.
+
+**When you want a second opinion before sending**, ask for one:
+
+```
+/redpen:validate-prompt rewrite the billing module to use the new tax API
+```
+
+That reviews the text and shows the rewrite without sending anything, and it
+works even with redpen turned off.
+
+**When it is in your way**, turn it down rather than off:
+
+```
+/redpen:mode lite     # warn, never block
+/redpen:mode off      # silence
+raw: fix it           # skip redpen for this one prompt
+```
+
+`ok`, `continue`, `yes`, `next` and other bare replies are never reviewed
+mid-conversation, so following up costs you nothing.
+
+**When you want to know how you are doing**, read the log back:
+
+```
+/redpen:analyze-chat
+```
+
+It reports which prompts needed rework, which issues keep recurring, and whether
+the model matched the work.
 
 **The judge.** Reviews are done by Haiku. With `ANTHROPIC_API_KEY` set, redpen
 calls the API directly, in about a second, billed to that key. Without it, it
