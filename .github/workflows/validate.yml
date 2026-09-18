@@ -1,0 +1,30 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Compile the scripts
+        run: python -m compileall -q plugins/prompt-redpen/scripts
+
+      - name: Self-check
+        run: python plugins/prompt-redpen/scripts/test_redpen.py
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Validate the plugin
+        run: claude plugin validate ./plugins/prompt-redpen --strict
+
+      - name: Validate the marketplace
+        run: claude plugin validate . --strict
