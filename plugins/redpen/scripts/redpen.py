@@ -77,6 +77,19 @@ VAGUE_RE = re.compile(
     r"update|change|help|continue|do it|finish|it'?s broken|doesn'?t work|"
     r"not working|any ideas)\b", re.I)
 ANCHOR_RE = re.compile(r"(`|```|https?://|@[\w./-]+|[\w/-]+\.[A-Za-z]{1,5}\b|\b\w+\(\))")
+# Short replies that only make sense as a continuation of what was already said.
+# Mid-conversation these are perfectly actionable, because the transcript is the
+# missing context, so reviewing them is both useless and infuriating.
+CONTINUE_RE = re.compile(
+    r"^\s*(y|n|yes|yeah|yep|yup|ok|okay|k|sure|right|correct|exactly|"
+    r"no|nope|nah|not quite|wrong|"
+    r"go|go on|go ahead|continue|carry on|keep going|proceed|resume|next|"
+    r"do it|make it so|please do|send it|ship it|"
+    r"more|again|retry|redo|once more|"
+    r"stop|wait|hold on|never mind|nevermind|cancel|undo|revert|"
+    r"finish|finish it|done|that'?s all|"
+    r"thanks|thank you|ty|nice|great|perfect|good|lgtm)"
+    r"\b[\s.,!?]*$", re.I)
 
 JUDGE_SYSTEM = """You review prompts a developer is about to send to a coding agent.
 Reply with ONE JSON object and nothing else. No prose, no code fences.
@@ -307,6 +320,7 @@ def cmd_scan(text):
 # every assistant line; effort lives in the settings files.
 
 MODEL_RE = re.compile(r'"model"\s*:\s*"([^"]+)"')
+ASSISTANT_RE = re.compile(rb'"type"\s*:\s*"assistant"')
 
 
 def settings_files(cwd):
@@ -393,6 +407,23 @@ def current_model(transcript_path, cwd=None):
     return env or normalise_model(merged_settings(cwd).get("model", ""))
 
 
+def session_has_history(transcript_path):
+    """True once Claude has spoken at least once in this session.
+
+    A bare "continue" on the first prompt of a session really is too vague to
+    act on. The same word on the tenth prompt is not, so the transcript decides.
+    """
+    try:
+        path = Path(transcript_path)
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            if size > CFG["transcript_tail_bytes"]:
+                f.seek(size - CFG["transcript_tail_bytes"])
+            return bool(ASSISTANT_RE.search(f.read()))
+    except Exception:
+        return False
+
+
 def current_effort(model, cwd=None):
     """Per-model effort wins over the global one.
 
@@ -452,7 +483,9 @@ def clear_pending(session_id):
 
 # ------------------------------------------------------------- prefilter ----
 
-def worth_reviewing(prompt, model_name, effort):
+def worth_reviewing(prompt, model_name, effort, has_history=False):
+    if has_history and CONTINUE_RE.match(prompt):
+        return ""
     words = len(prompt.split())
     anchored = bool(ANCHOR_RE.search(prompt))
     if words <= 4:
@@ -762,7 +795,11 @@ def hook():
         return 0
 
     # phase 1: review
-    reason = worth_reviewing(prompt, model_name, effort)
+    history = session_has_history(data.get("transcript_path"))
+    if history and CONTINUE_RE.match(prompt):
+        # Carries no content of its own; the conversation is the content.
+        return 0
+    reason = worth_reviewing(prompt, model_name, effort, history)
     if mode != "ultra" and not reason:
         return 0
 

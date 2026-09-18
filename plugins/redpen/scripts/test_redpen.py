@@ -85,6 +85,38 @@ def test_model_from_transcript():
         assert redpen.current_model(None, empty) == ""
 
 
+def test_continuations_pass_mid_conversation():
+    """A short reply mid-conversation is the commonest prompt there is."""
+    w = redpen.worth_reviewing
+    for word in ["ok", "continue", "go on", "yes", "next", "do it", "keep going",
+                 "proceed", "more", "again", "no", "nope", "stop", "finish",
+                 "thanks", "lgtm", "sure", "y", "n", "Continue.", "OK!"]:
+        assert not w(word, "claude-opus-5", "high", has_history=True), word
+        assert w(word, "claude-opus-5", "high", has_history=False), \
+            f"{word!r} on the first prompt of a session is still too vague"
+
+
+def test_continuations_do_not_swallow_real_prompts():
+    """Only a bare acknowledgement passes; a real instruction is still reviewed."""
+    w = redpen.worth_reviewing
+    assert w("continue the refactor", "claude-opus-5", "high", has_history=True), \
+        "this one carries an instruction, so it is not a bare continuation"
+    assert w("fix it", "claude-opus-5", "high", has_history=True)
+    assert w("ok now fix the thing", "claude-opus-5", "high", has_history=True)
+
+
+def test_session_history():
+    with tempfile.TemporaryDirectory() as d:
+        t = Path(d) / "t.jsonl"
+        assert not redpen.session_has_history(str(t)), "no file means no history"
+        t.write_text(json.dumps({"type": "user", "message": {"role": "user"}}) + "\n")
+        assert not redpen.session_has_history(str(t)), "the user alone is not history"
+        with open(t, "a") as f:
+            f.write(json.dumps({"type": "assistant", "message": {"model": "m"}}) + "\n")
+        assert redpen.session_has_history(str(t)), "Claude has spoken"
+    assert not redpen.session_has_history(None)
+
+
 def test_effort_from_settings():
     with tempfile.TemporaryDirectory() as d:
         cfg = Path(d) / ".claude"

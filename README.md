@@ -213,8 +213,18 @@ short with nothing concrete in it (no path, code, URL or identifier), or opens
 with a bare `fix` / `improve` / `it's broken`, or looks heavy while you're on a
 small model, or looks trivial while you're on a large one or at high effort.
 
+A short reply that only continues the conversation is never reviewed. `ok`,
+`continue`, `go on`, `yes`, `no`, `next`, `more`, `again`, `stop`, `thanks` and
+the rest go straight through, because mid-conversation the transcript is the
+context and reviewing them in isolation is both useless and infuriating. The
+same words on the very first prompt of a session are still thin, and are still
+treated that way, so the transcript decides rather than the wording.
+
+Adding anything to one takes it out of that class: `continue` passes, `continue
+the refactor` gets reviewed like any other prompt.
+
 Tune the regexes at the top of `plugins/redpen/scripts/redpen.py`:
-`VAGUE_RE`, `HEAVY_RE`, `TRIVIAL_RE`, `ANCHOR_RE`.
+`VAGUE_RE`, `HEAVY_RE`, `TRIVIAL_RE`, `ANCHOR_RE`, `CONTINUE_RE`.
 
 ## Escape hatches
 
