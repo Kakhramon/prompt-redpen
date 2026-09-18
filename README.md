@@ -335,7 +335,7 @@ treated that way, so the transcript decides rather than the wording.
 Adding anything to one takes it out of that class: `continue` passes, `continue
 the refactor` gets reviewed like any other prompt.
 
-Tune the regexes at the top of `plugins/redpen/scripts/redpen.py`:
+Tune the regexes at the top of `scripts/redpen.py`:
 `VAGUE_RE`, `HEAVY_RE`, `TRIVIAL_RE`, `ANCHOR_RE`, `CONTINUE_RE`.
 
 ## Escape hatches
@@ -375,10 +375,15 @@ reach the transcript, so that log is what `/redpen:analyze-chat` reads.
 ## Development
 
 ```
-claude plugin validate ./plugins/redpen --strict
-python3 plugins/redpen/scripts/test_redpen.py
-claude --plugin-dir ./plugins/redpen
+claude plugin validate .claude-plugin/plugin.json --strict   # the plugin
+claude plugin validate . --strict                            # the marketplace
+python3 scripts/test_redpen.py
+claude --plugin-dir .
 ```
+
+The repo root is the plugin, so both manifests live in `.claude-plugin/`. Point
+the validator at the plugin manifest by name; pointed at the directory it checks
+the marketplace and says nothing about the plugin.
 
 `--plugin-dir` loads it for one session straight from the working copy, so you
 can iterate without installing. A GitHub Action runs the validator and the
@@ -392,7 +397,7 @@ installing it surfaces the problem, so install your own plugin once before you
 tell anyone about it.
 
 To ship an update, bump `version` in
-`plugins/redpen/.claude-plugin/plugin.json` and push. Users get it on
+`.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`, then push. Users get it on
 `/plugin marketplace update prompt-redpen`.
 
 ## Codex, Cursor, and other agents
@@ -416,7 +421,7 @@ against the hook's hash and skips anything it has not seen before.
 
 ```
 git clone https://github.com/kakhramon/prompt-redpen
-prompt-redpen/plugins/redpen/scripts/install-cursor.sh
+prompt-redpen/scripts/install-cursor.sh
 ```
 
 That writes `~/.cursor/hooks.json` pointing at the clone. Pass a project path to
@@ -439,7 +444,7 @@ three rows read `no`. Everything that blocks works identically everywhere.
 
 Modes, credential scanning and config are shared: one
 `~/.config/redpen/config.json` covers every host on the machine. Where there is
-no skill, call the script: `python3 .../scripts/redpen.py --mode lite`.
+no skill, call the script: `python3 <clone>/scripts/redpen.py --mode lite`.
 
 Anything else that runs a command on prompt submit should work untouched. The
 script recognises the host from the shape of what it is handed and falls back to

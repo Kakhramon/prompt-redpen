@@ -7,8 +7,9 @@
     {
       "name": "redpen",
       "source": {
-        "source": "local",
-        "path": "./plugins/redpen"
+        "source": "url",
+        "url": "https://github.com/kakhramon/prompt-redpen.git",
+        "ref": "main"
       },
       "policy": {
         "installation": "AVAILABLE",
