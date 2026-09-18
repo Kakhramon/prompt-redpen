@@ -340,10 +340,16 @@ a question, your next prompt is not reviewed at all. An answer is thin by
 nature - "no, I do not own it" has no verb, no file and no scope - and blocking
 it buries the reply the agent was waiting for.
 
-Everything else that survives to the judge is sent with the agent's last turn
-attached, so a follow-up is judged as a follow-up. "The other file too" is a
-complete instruction after the turn that names the file, and the judge is told
-to read both and to never ask for what that turn already said.
+Everything else that survives to the judge is sent with the tail of the
+conversation attached, so a follow-up is judged as a follow-up. "That one too"
+is a complete instruction after the turns that name the thing, and the judge is
+told to read the thread and to never ask for what it already says.
+
+That tail is budgeted, not unbounded: at most six turns, 600 characters each,
+2000 characters in total, newest first. Depth costs nothing over the old
+single-turn context because the budget is the same size - it is spread across
+the exchange instead of spent on one turn. Tune `context_turns`,
+`turn_chars` and `context_chars` in `CFG` at the top of `scripts/redpen.py`.
 
 An "ok" verdict never blocks. If the model or effort looks wrong, redpen says
 so in a one-line notice and lets the prompt through; only a prompt the judge

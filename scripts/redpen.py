@@ -53,7 +53,9 @@ CFG = {
     "tiers": {"haiku": 1, "sonnet": 2, "opus": 3, "fable": 4},
     "efforts": {"low": 1, "medium": 2, "high": 3, "xhigh": 4, "max": 5},
     "transcript_tail_bytes": 200_000,
-    "last_turn_chars": 2_000,
+    "context_chars": 2_000,   # total budget for conversation context
+    "context_turns": 6,       # at most this many turns inside it
+    "turn_chars": 600,        # and no single turn hogs the budget
     "log_limit": 2000,
 }
 
@@ -147,13 +149,14 @@ Effort fit:
 - Never recommend "max"; it overthinks with diminishing returns.
 - "any" when effort does not matter.
 
-When a previous_turn is given, the prompt is a reply inside a conversation,
-not a standalone request. Judge it as a reply: read it together with that turn
-and only flag what stays unclear once both are read. A prompt that the previous
-turn fully explains is "ok", however short it looks on its own - an answer to a
+When a <conversation> is given, the prompt is the next turn in it, not a
+standalone request. Judge it as a reply: read it together with those turns and
+only flag what stays unclear once all of it is read. A prompt the conversation
+already explains is "ok", however short it looks on its own - an answer to a
 question the agent asked, a go-ahead for work it just proposed, a "the other
-file too" that the turn names. Never ask for information the previous turn
-already gives.
+file too" naming something named earlier. Never ask for information the
+conversation already gives. The turns are trimmed and may start mid-sentence;
+that is the transcript, not the user being unclear.
 
 Be conservative. Terse but unambiguous is "ok". Only flag model or effort when
 the mismatch is obvious and costs real tokens."""
@@ -463,10 +466,13 @@ def session_has_history(transcript_path):
         return False
 
 
-def last_agent_turn(transcript_path):
-    """Text of the agent's last spoken turn, or "" when there is none.
+def recent_turns(transcript_path):
+    """The tail of the conversation as [(role, text), ...], oldest first.
 
-    Tool calls are skipped: they are not what the agent said to the user.
+    Newest turns get the character budget first, so depth is free: the same
+    2000 characters that used to hold one agent turn now hold the last few
+    exchanges, trimmed, and the judge sees a thread instead of a snapshot.
+    Tool calls are skipped - they are not what either side said.
     """
     try:
         path = Path(transcript_path)
@@ -476,13 +482,17 @@ def last_agent_turn(transcript_path):
                 f.seek(size - CFG["transcript_tail_bytes"])
             lines = f.read().splitlines()
     except Exception:
-        return ""
+        return []
+    turns, budget = [], CFG["context_chars"]
     for raw in reversed(lines):
+        if budget <= 0 or len(turns) >= CFG["context_turns"]:
+            break
         try:
             entry = json.loads(raw)
         except Exception:
             continue
-        if entry.get("type") != "assistant":
+        role = entry.get("type")
+        if role not in ("user", "assistant"):
             continue
         content = (entry.get("message") or {}).get("content")
         if isinstance(content, list):
@@ -490,8 +500,19 @@ def last_agent_turn(transcript_path):
                             if isinstance(c, dict) and c.get("type") == "text")
         else:
             text = content if isinstance(content, str) else ""
-        text = text.strip()
-        if text:
+        text = " ".join(text.split())
+        if not text or BLOCK_MARKER in text:
+            continue  # a tool call, or redpen's own block echoed back
+        keep = min(len(text), CFG["turn_chars"], budget)
+        turns.append((role, text[-keep:]))  # tail: the ask lands at the end
+        budget -= keep
+    return list(reversed(turns))
+
+
+def last_agent_turn(transcript_path):
+    """Text of the agent's last spoken turn, or "" when there is none."""
+    for role, text in reversed(recent_turns(transcript_path)):
+        if role == "assistant":
             return text
     return ""
 
@@ -672,7 +693,7 @@ def judge_available():
     return bool(os.environ.get("ANTHROPIC_API_KEY") or shutil.which("claude"))
 
 
-def judge(prompt, model_name, effort, cwd, last_turn=""):
+def judge(prompt, model_name, effort, cwd, turns=()):
     # Belt and braces: the hook already stops credential-bearing prompts, but
     # nothing reaches a judge model without passing through the scanner.
     cfg, sdir = load_config(), state_dir()
@@ -680,13 +701,15 @@ def judge(prompt, model_name, effort, cwd, last_turn=""):
     user_msg = (f"Working directory: {cwd}\n"
                 f"Model in use: {model_name or 'unknown'}\n"
                 f"Effort level: {effort or 'unknown'}\n\n")
-    if last_turn:
+    if turns:
         # The conversation is half the prompt. "Now do the same for auth.py" is
         # a complete instruction after the turn that says what the same is, and
         # gibberish without it. Redact it too - the agent quotes what you paste.
-        tail = secret_scan.redact(last_turn, sdir, cfg)[-CFG["last_turn_chars"]:]
-        user_msg += ("What the agent said last (the prompt is a reply to this):\n"
-                     f"<previous_turn>\n{tail}\n</previous_turn>\n\n")
+        thread = "\n".join(f"{role}: {secret_scan.redact(text, sdir, cfg)}"
+                           for role, text in turns)
+        user_msg += ("How the conversation got here, oldest first. The prompt is "
+                     "the next turn after this:\n"
+                     f"<conversation>\n{thread}\n</conversation>\n\n")
     user_msg += f"Prompt to review:\n<prompt>\n{prompt}\n</prompt>"
     try:
         raw = judge_via_api(user_msg) if os.environ.get("ANTHROPIC_API_KEY") \
@@ -1088,7 +1111,7 @@ def hook():
         return 0
 
     verdict_data = judge(prompt, model_name, effort, cwd,
-                         last_agent_turn(data.get("transcript_path")))
+                         recent_turns(data.get("transcript_path")))
     if not verdict_data:
         # Fail open, every time. A network hiccup must never cost you the
         # ability to work. Say so once so the silence is not mistaken for a

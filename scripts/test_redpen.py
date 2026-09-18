@@ -312,8 +312,8 @@ def test_block_text_is_not_reviewed_again():
     assert redpen.BLOCK_MARKER in reason
 
 
-def test_the_judge_sees_the_previous_turn():
-    """A short prompt is only vague without what it replies to. Send both."""
+def test_the_judge_sees_the_conversation():
+    """A short prompt is only vague without what it replies to. Send the thread."""
     seen = {}
 
     def fake(user_msg):
@@ -324,20 +324,42 @@ def test_the_judge_sees_the_previous_turn():
     key = os.environ.pop("ANTHROPIC_API_KEY", None)
     try:
         redpen.judge("the other file too", "claude-sonnet-5", "high", "/tmp",
-                     "I renamed the flag in server.py; config.py uses it too.")
+                     [("user", "rename the flag"),
+                      ("assistant", "Renamed it in server.py; config.py reads it too.")])
+        assert "<conversation>" in seen["msg"]
+        assert "config.py reads it too" in seen["msg"]
+        assert "user: rename the flag" in seen["msg"]
+
+        redpen.judge("fix it", "claude-sonnet-5", "high", "/tmp", [])
+        assert "<conversation>" not in seen["msg"]
     finally:
         redpen.judge_via_cli = real
         if key:
             os.environ["ANTHROPIC_API_KEY"] = key
-    assert "<previous_turn>" in seen["msg"]
-    assert "config.py uses it too" in seen["msg"]
 
-    redpen.judge_via_cli = fake
-    try:
-        redpen.judge("fix it", "claude-sonnet-5", "high", "/tmp", "")
-    finally:
-        redpen.judge_via_cli = real
-    assert "<previous_turn>" not in seen["msg"]
+
+def test_recent_turns_stay_inside_the_budget():
+    """Depth is free only while the budget holds. Newest turns get it first."""
+    big = "x" * 5_000
+    f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+    for i in range(20):
+        for role in ("user", "assistant"):
+            f.write(json.dumps({"type": role, "message": {"content": [
+                {"type": "text", "text": f"{role}{i} {big}"}]}}) + "\n")
+    f.close()
+    turns = redpen.recent_turns(f.name)
+    assert len(turns) <= redpen.CFG["context_turns"]
+    assert all(len(t) <= redpen.CFG["turn_chars"] for _, t in turns)
+    assert sum(len(t) for _, t in turns) <= redpen.CFG["context_chars"]
+    # oldest first, and the newest turn of the file is the last one kept
+    assert turns[-1][0] == "assistant"
+
+    # redpen's own block text never becomes context for the next review
+    f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+    f.write(json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "text", "text": redpen.BLOCK_MARKER + " do better"}]}}) + "\n")
+    f.close()
+    assert redpen.recent_turns(f.name) == []
 
 
 def test_answering_a_question():
