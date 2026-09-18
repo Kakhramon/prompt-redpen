@@ -32,8 +32,8 @@ pick the closest mode and say which one you picked:
 | the normal behaviour back | `full` |
 | every prompt reviewed, and blocked | `ultra` |
 
-If they pick `auto`, mention once that it reviews every prompt, so it wants
-`ANTHROPIC_API_KEY` set or each prompt waits on the command-line judge.
+If they pick `auto`, mention once that it corrects prompts for them instead of
+asking, so a rewrite lands without their confirming it.
 
 Then report the script's output in one or two lines. Don't add your own
 explanation of the modes on top of what the script prints.

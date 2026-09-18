@@ -62,32 +62,6 @@ or just retype it.
 
 Nothing was sent. The turn has not started yet.
 
-## Numbers
-
-Measured, not estimated. A headless agent in a small sample repo, five vague
-prompts, two repetitions each, ten runs per arm. Every figure is the
-`total_cost_usd` the CLI itself reported.
-
-| | mean cost | mean wall |
-|---|--:|--:|
-| letting Sonnet guess at a vague prompt | $0.1913 | 47s |
-| redpen catching the same prompt on Haiku | $0.0302 | 9s |
-
-Catching costs **16%** of guessing and takes **19%** as long.
-
-| one mechanical edit | mean cost |
-|---|--:|
-| on Opus | $0.2698 |
-| on Haiku | $0.0352 |
-
-Same finished edit, **7.7x** the price. That gap is what the `/model` nudge is
-for.
-
-Read the caveats before quoting these: a guess is not always waste, a caught
-prompt still has to be re-sent and paid for, and the sample is small.
-[Full writeup](benchmarks/results-2026-09-18.md) &middot;
-reproduce with `python3 benchmarks/run.py --reps 2`.
-
 ## Install
 
 ```
@@ -97,9 +71,6 @@ reproduce with `python3 benchmarks/run.py --reps 2`.
 
 Then start a new session. Run `/hooks` to see the one hook it registers, and
 `/redpen:mode` to see what it's doing.
-
-Requires Python 3.8+ on `PATH` as `python3`. On Windows, change `python3` to
-`python` in `plugins/redpen/hooks/hooks.json`.
 
 The default mode blocks and waits. If you would rather be warned than stopped,
 run `/redpen:mode lite` once and it stays that way.
@@ -155,11 +126,14 @@ mid-conversation, so following up costs you nothing.
 It reports which prompts needed rework, which issues keep recurring, and whether
 the model matched the work.
 
-**The judge.** Reviews are done by Haiku. With `ANTHROPIC_API_KEY` set, redpen
-calls the API directly, in about a second, billed to that key. Without it, it
-shells out to `claude -p --model haiku`, which uses your normal auth but pays
-for CLI startup every time: ten to twenty seconds in practice. Either way, if
-the judge doesn't answer within 28 seconds the prompt goes through untouched.
+**The judge.** Reviews are done by Haiku, through the `claude` CLI you already
+have, on the auth you already use. Nothing to sign up for and no key to set.
+
+It costs ten to twenty seconds when it runs, most of it CLI startup, which is
+why `full` only calls it for prompts that look thin. If you happen to have
+`ANTHROPIC_API_KEY` in your environment redpen uses the API directly instead,
+which answers in about a second and is billed to that key. That is a speed
+option, not a requirement.
 
 redpen always fails open. A timeout, a missing key or no network means your
 prompt is sent unreviewed rather than held, because a review tool that can lock
@@ -177,7 +151,7 @@ when that happens, so the quiet is never mistaken for approval.
 |---|---|---|---|
 | `off` | never | nothing | no |
 | `lite` | never | one-line warning, prompt goes through as typed | no |
-| `auto` | every prompt | a loose prompt is tightened and sent with the rewrite attached | no |
+| `auto` | every prompt, or the thin ones on the slower judge | a loose prompt is tightened and sent with the rewrite attached | no |
 | `full` | when the prefilter fires | shows the rewrite and waits for your `ok` | yes |
 | `ultra` | every prompt | as `full`, on everything | yes |
 
@@ -190,15 +164,18 @@ was clear and whose wording was loose, it attaches a tightened version and lets
 the turn run. When it cannot rewrite one faithfully, it says what was missing
 and sends your words unchanged.
 
-Two things to know before turning it on. It reviews **every** prompt, because
-the prefilter is tuned to catch prompts too vague to rewrite, which is the
-opposite of what `auto` can use. So set `ANTHROPIC_API_KEY` first; without it
-every prompt waits ten to twenty seconds for the command-line judge.
+How widely it looks depends on how fast the judge is. The prefilter is tuned to
+catch prompts too vague to act on, and those are the ones that cannot be
+rewritten faithfully, so what `auto` can actually use is the loose-but-clear
+prompt that sails past the prefilter. It therefore reviews every prompt when the
+API path is available and answers in a second, and falls back to the prefilter
+on the CLI path rather than putting fifteen seconds in front of everything you
+type.
 
-And a hook cannot replace your prompt text. The rewrite rides alongside what you
-typed rather than instead of it. That steers a loose prompt, because a loose
-prompt has nothing to contradict the rewrite, but it is an addition and not a
-substitution.
+One thing to know: a hook cannot replace your prompt text. The rewrite rides
+alongside what you typed rather than instead of it. That steers a loose prompt,
+because a loose prompt has nothing to contradict the rewrite, but it is an
+addition and not a substitution.
 
 The mode is global on the machine and persists across sessions. Set the starting
 mode with `REDPEN_MODE=lite` in your shell, or `{"defaultMode": "lite"}`
@@ -427,8 +404,10 @@ To ship an update, bump `version` in
   the model. On a loose prompt that is invisible; on a prompt that already says
   something specific, your wording wins over the rewrite, which is the right
   outcome but not always the obvious one.
-- **`auto` without an API key is slow**, because it reviews every prompt and the
-  command-line judge costs ten to twenty seconds each time.
+- **The command-line judge is slow**, ten to twenty seconds, nearly all of it
+  CLI startup rather than anything redpen does. It is why `full` reviews only
+  what the prefilter flags, and why `auto` narrows to the same set unless the
+  faster API path is available.
 - **Latency on the CLI judge path.** Ten to twenty seconds, all of it CLI
   startup. Set an API key, or run in `lite`.
 - **The judge can be wrong about model fit.** It sees one prompt with no repo

@@ -238,7 +238,7 @@ def set_mode(mode):
 MODE_HELP = {
     "off": "Redpen does nothing. /redpen:validate-prompt still works on demand.",
     "lite": "Heuristics only, no model call, never blocks. Warns when a prompt looks thin.",
-    "auto": "Reviews every prompt, tightens the loose ones and sends them with the rewrite attached. Never blocks. Set ANTHROPIC_API_KEY first.",
+    "auto": "Tightens a loose prompt and sends it with the rewrite attached, never blocking. Reviews the thin prompts, or every prompt where the faster API path is available.",
     "full": "Reviews prompts that look thin or mismatched, and blocks for your approval.",
     "ultra": "Reviews every prompt and blocks unless it is clearly actionable.",
 }
@@ -556,6 +556,27 @@ def judge_via_cli(user_msg):
     return proc.stdout
 
 
+def fast_judge():
+    """The API path answers in about a second; the CLI path takes ten to twenty."""
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
+def reviews_everything(mode):
+    """Which modes look at prompts the prefilter did not flag.
+
+    ultra always does, because being thorough is the whole point of it.
+
+    auto wants to, because the prefilter is tuned to catch prompts too vague to
+    act on and those are exactly the ones that cannot be rewritten faithfully:
+    what auto can actually use is the loose-but-clear prompt, which sails past
+    the prefilter untouched. But reviewing every prompt through the command-line
+    judge would put ten to twenty seconds in front of all of them, so auto only
+    casts the wide net when the fast path is available, and falls back to the
+    prefilter when it is not.
+    """
+    return mode == "ultra" or (mode == "auto" and fast_judge())
+
+
 def judge_available():
     return bool(os.environ.get("ANTHROPIC_API_KEY") or shutil.which("claude"))
 
@@ -664,9 +685,9 @@ def cmd_review(text):
     if not verdict_data:
         if judge_available():
             print(f"The judge did not answer within {CFG['judge_timeout']}s. "
-                  "Set ANTHROPIC_API_KEY to use the fast path, or try again.")
+                  "Try again; the `claude` CLI is slow to start.")
         else:
-            print("No judge available: set ANTHROPIC_API_KEY, or put `claude` on PATH.")
+            print("No judge available: `claude` is not on PATH.")
         return 0
     print(f"verdict: {verdict_data.get('verdict', '?')}   (redpen mode: {mode})")
     for i in verdict_data.get("issues") or []:
@@ -735,11 +756,9 @@ def warn_judge_down(session):
     except Exception:
         pass
     if judge_available():
-        detail = (f"the judge did not answer within {CFG['judge_timeout']}s. "
-                  "Set ANTHROPIC_API_KEY for the fast path.")
+        detail = f"the judge did not answer within {CFG['judge_timeout']}s."
     else:
-        detail = ("no judge is reachable: set ANTHROPIC_API_KEY, or put `claude` "
-                  "on PATH.")
+        detail = "the `claude` CLI is not on PATH, so there is no judge to ask."
     line = f"redpen is not reviewing prompts this session - {detail}"
     emit({"systemMessage": f"\u26a0 {line}",
           "hookSpecificOutput": {
@@ -893,11 +912,7 @@ def hook():
         # Carries no content of its own; the conversation is the content.
         return 0
     reason = worth_reviewing(prompt, model_name, effort, history)
-    # auto reviews everything, like ultra. The prefilter selects for prompts too
-    # vague to rewrite faithfully, which is the opposite of what auto can use: a
-    # rewrite is only safe when intent was already clear and the wording was
-    # loose, and loose-but-clear prompts sail past the prefilter untouched.
-    if mode not in ("auto", "ultra") and not reason:
+    if not reason and not reviews_everything(mode):
         return 0
 
     if mode == "lite":

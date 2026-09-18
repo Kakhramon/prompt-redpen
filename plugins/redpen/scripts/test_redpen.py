@@ -155,6 +155,21 @@ def test_auto_mode_sends_the_rewrite():
     assert "Sent as written" in out["systemMessage"]
 
 
+def test_auto_widens_only_on_the_fast_path():
+    """Reviewing every prompt is only affordable when the judge answers fast."""
+    os.environ.pop("ANTHROPIC_API_KEY", None)
+    assert redpen.reviews_everything("ultra"), "ultra always reviews everything"
+    assert not redpen.reviews_everything("auto"), "CLI judge is too slow for that"
+    assert not redpen.reviews_everything("full")
+    assert not redpen.reviews_everything("lite")
+    os.environ["ANTHROPIC_API_KEY"] = "sk-ant-test"
+    try:
+        assert redpen.reviews_everything("auto"), "fast path affords the wide net"
+        assert not redpen.reviews_everything("full"), "full still uses the prefilter"
+    finally:
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+
+
 def test_modes_include_auto():
     assert redpen.MODES == ("off", "lite", "auto", "full", "ultra")
     for m in redpen.MODES:

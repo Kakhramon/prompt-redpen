@@ -23,5 +23,5 @@ script printed them. Do not rewrite the refined prompt yourself and do not add
 your own critique on top. If the user then asks you to act on the refined
 version, treat that as a fresh request.
 
-If the script says the judge is unavailable, say so in one line: it needs either
-`ANTHROPIC_API_KEY` in the environment or the `claude` CLI on `PATH`.
+If the script says the judge is unavailable, say so in one line: it asks Haiku
+through the `claude` CLI, so that has to be on `PATH`.
