@@ -39,6 +39,9 @@ Then start a new session. Run `/hooks` to see the one hook it registers, and
 Requires Python 3.8+ on `PATH` as `python3`. On Windows, change `python3` to
 `python` in `plugins/prompt-redpen/hooks/hooks.json`.
 
+The default mode blocks and waits. If you would rather be warned than stopped,
+run `/prompt-redpen:redpen-mode lite` once and it stays that way.
+
 **The judge.** Reviews are done by Haiku. With `ANTHROPIC_API_KEY` set, redpen
 calls the API directly, in about a second, billed to that key. Without it, it
 shells out to `claude -p --model haiku`, which uses your normal auth but pays
