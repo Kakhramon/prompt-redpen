@@ -332,6 +332,14 @@ def test_answering_a_question():
                       ("assistant", "Done. Pushed to main."))
     assert not redpen.answering_a_question(told)
 
+    # The shape that started this: the question is mid-paragraph and the turn
+    # ends on a statement. Requiring a trailing "?" missed it.
+    midway = transcript(("user", "do the thing"),
+                        ("assistant", "Still yours to answer: do you own "
+                                      "github.com/Kahero from 2018? That decides "
+                                      "transfer versus a new org name."))
+    assert redpen.answering_a_question(midway)
+
     # a trailing tool call must not hide the question that came before it
     f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
     f.write(json.dumps({"type": "assistant",

@@ -461,6 +461,15 @@ def answering_a_question(transcript_path):
     no verb, no file and no scope, and every heuristic here will call it vague.
     But the agent asked, so the context is the question, and reviewing the reply
     is worse than useless - it buries the answer the agent was waiting for.
+
+    A question mark anywhere in the turn counts, not just at the end. Agents ask
+    in the middle and then carry on: "do you own that account? It decides which
+    name we use." Requiring the turn to end on the question missed exactly that,
+    which is the shape that started this.
+
+    This errs toward letting prompts through. A genuinely new vague prompt typed
+    straight after a question passes unreviewed, for one turn. Missing a review
+    costs a turn; blocking an answer costs the answer.
     """
     try:
         path = Path(transcript_path)
@@ -487,7 +496,7 @@ def answering_a_question(transcript_path):
         text = text.strip()
         if not text:
             continue  # a tool call, not the turn's last word
-        return text.endswith("?")
+        return "?" in text
     return False
 
 
