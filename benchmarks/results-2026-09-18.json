@@ -1,0 +1,250 @@
+{
+  "arm1_guess": [
+    {
+      "cost_usd": 0.2048346,
+      "input": 16,
+      "output": 3600,
+      "cache_write": 26460,
+      "cache_read": 314813,
+      "turns": 9,
+      "wall_s": 53.5,
+      "prompt": "fix it"
+    },
+    {
+      "cost_usd": 0.202302,
+      "input": 14,
+      "output": 4057,
+      "cache_write": 26877,
+      "cache_read": 270980,
+      "turns": 8,
+      "wall_s": 55.2,
+      "prompt": "fix it"
+    },
+    {
+      "cost_usd": 0.29174920000000004,
+      "input": 12,
+      "output": 9259,
+      "cache_write": 36764,
+      "cache_read": 255676,
+      "turns": 7,
+      "wall_s": 115.9,
+      "prompt": "improve this"
+    },
+    {
+      "cost_usd": 0.17031899999999997,
+      "input": 12,
+      "output": 2220,
+      "cache_write": 25284,
+      "cache_read": 230075,
+      "turns": 7,
+      "wall_s": 37.8,
+      "prompt": "improve this"
+    },
+    {
+      "cost_usd": 0.16250960000000003,
+      "input": 12,
+      "output": 1669,
+      "cache_write": 24773,
+      "cache_read": 228793,
+      "turns": 7,
+      "wall_s": 29.6,
+      "prompt": "make it faster"
+    },
+    {
+      "cost_usd": 0.159354,
+      "input": 12,
+      "output": 1447,
+      "cache_write": 24560,
+      "cache_read": 228375,
+      "turns": 7,
+      "wall_s": 25.5,
+      "prompt": "make it faster"
+    },
+    {
+      "cost_usd": 0.16335000000000002,
+      "input": 12,
+      "output": 1719,
+      "cache_write": 24849,
+      "cache_read": 228970,
+      "turns": 7,
+      "wall_s": 28.7,
+      "prompt": "clean up the code"
+    },
+    {
+      "cost_usd": 0.16144779999999997,
+      "input": 12,
+      "output": 1565,
+      "cache_write": 24776,
+      "cache_read": 228619,
+      "turns": 7,
+      "wall_s": 25.4,
+      "prompt": "clean up the code"
+    },
+    {
+      "cost_usd": 0.18877760000000002,
+      "input": 12,
+      "output": 3219,
+      "cache_write": 27091,
+      "cache_read": 236248,
+      "turns": 7,
+      "wall_s": 45.0,
+      "prompt": "it's broken"
+    },
+    {
+      "cost_usd": 0.2082154,
+      "input": 10,
+      "output": 4790,
+      "cache_write": 30210,
+      "cache_read": 192552,
+      "turns": 5,
+      "wall_s": 56.5,
+      "prompt": "it's broken"
+    }
+  ],
+  "arm1_catch": [
+    {
+      "cost_usd": 0.029346700000000003,
+      "input": 10,
+      "output": 666,
+      "cache_write": 11469,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 7.8,
+      "prompt": "fix it"
+    },
+    {
+      "cost_usd": 0.029459700000000002,
+      "input": 10,
+      "output": 690,
+      "cache_write": 11466,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 8.7,
+      "prompt": "fix it"
+    },
+    {
+      "cost_usd": 0.0300207,
+      "input": 10,
+      "output": 694,
+      "cache_write": 11742,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 8.6,
+      "prompt": "improve this"
+    },
+    {
+      "cost_usd": 0.0294467,
+      "input": 10,
+      "output": 794,
+      "cache_write": 11204,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 9.3,
+      "prompt": "improve this"
+    },
+    {
+      "cost_usd": 0.0317757,
+      "input": 10,
+      "output": 1041,
+      "cache_write": 11746,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 10.2,
+      "prompt": "make it faster"
+    },
+    {
+      "cost_usd": 0.0308227,
+      "input": 10,
+      "output": 849,
+      "cache_write": 11749,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 10.8,
+      "prompt": "make it faster"
+    },
+    {
+      "cost_usd": 0.0317947,
+      "input": 10,
+      "output": 1046,
+      "cache_write": 11743,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 11.7,
+      "prompt": "clean up the code"
+    },
+    {
+      "cost_usd": 0.030213700000000003,
+      "input": 10,
+      "output": 729,
+      "cache_write": 11747,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 8.9,
+      "prompt": "clean up the code"
+    },
+    {
+      "cost_usd": 0.0292307,
+      "input": 10,
+      "output": 534,
+      "cache_write": 11746,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 7.9,
+      "prompt": "it's broken"
+    },
+    {
+      "cost_usd": 0.0294807,
+      "input": 10,
+      "output": 584,
+      "cache_write": 11746,
+      "cache_read": 13607,
+      "turns": 1,
+      "wall_s": 7.1,
+      "prompt": "it's broken"
+    }
+  ],
+  "arm2_big": [
+    {
+      "cost_usd": 0.28049499999999994,
+      "input": 8,
+      "output": 621,
+      "cache_write": 21309,
+      "cache_read": 101662,
+      "turns": 4,
+      "wall_s": 13.9,
+      "model": "opus"
+    },
+    {
+      "cost_usd": 0.2590475,
+      "input": 6,
+      "output": 417,
+      "cache_write": 21220,
+      "cache_read": 70767,
+      "turns": 3,
+      "wall_s": 9.3,
+      "model": "opus"
+    }
+  ],
+  "arm2_small": [
+    {
+      "cost_usd": 0.0356597,
+      "input": 26,
+      "output": 826,
+      "cache_write": 12087,
+      "cache_read": 63207,
+      "turns": 3,
+      "wall_s": 8.6,
+      "model": "haiku"
+    },
+    {
+      "cost_usd": 0.0348388,
+      "input": 26,
+      "output": 738,
+      "cache_write": 11909,
+      "cache_read": 63208,
+      "turns": 3,
+      "wall_s": 8.9,
+      "model": "haiku"
+    }
+  ]
+}

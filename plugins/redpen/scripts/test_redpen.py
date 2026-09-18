@@ -117,6 +117,50 @@ def test_session_history():
     assert not redpen.session_has_history(None)
 
 
+def test_usable_rewrite():
+    """A rewrite with a hole in it must never be sent on the user's behalf."""
+    good = "Fix the /health endpoint in server.py, which returns 500 since the redis upgrade."
+    assert redpen.usable_rewrite(good, "fix it")
+    for bad in [
+        "Fix the bug in [file/location]. The problem is [describe the issue].",
+        "Rename <the variable> in the file you meant.",
+        "Update {{module}} to the new API.",
+        "",
+        "   ",
+    ]:
+        assert not redpen.usable_rewrite(bad, "fix it"), bad
+    assert not redpen.usable_rewrite("fix it", "fix it"), "identical is not a rewrite"
+    # Brackets that are part of real code must survive.
+    assert redpen.usable_rewrite("Change items[0] to items[-1] in cart.py", "fix it")
+
+
+def test_auto_mode_sends_the_rewrite():
+    import io, contextlib
+    good = "Fix the /health endpoint in server.py, which returns 500 since the redis upgrade."
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        redpen.send_with_rewrite("fix it", good, "refine", ["no file named"], "", "auto")
+    out = json.loads(buf.getvalue())
+    assert "decision" not in out, "auto mode must never block"
+    assert good in out["hookSpecificOutput"]["additionalContext"]
+
+    # A rewrite it could not finish is not sent; the user is told instead.
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        redpen.send_with_rewrite("fix it", "Fix the bug in [where?]", "refine",
+                                 ["no file named"], "", "auto")
+    out = json.loads(buf.getvalue())
+    assert "decision" not in out
+    assert "hookSpecificOutput" not in out, "nothing unsafe may be attached"
+    assert "Sent as written" in out["systemMessage"]
+
+
+def test_modes_include_auto():
+    assert redpen.MODES == ("off", "lite", "auto", "full", "ultra")
+    for m in redpen.MODES:
+        assert m in redpen.MODE_HELP, m
+
+
 def test_effort_from_settings():
     with tempfile.TemporaryDirectory() as d:
         cfg = Path(d) / ".claude"

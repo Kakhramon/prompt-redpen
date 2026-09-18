@@ -111,7 +111,8 @@ works even with redpen turned off.
 **When it is in your way**, turn it down rather than off:
 
 ```
-/redpen:mode lite     # warn, never block
+/redpen:mode auto     # rewrite and send, never block
+/redpen:mode lite     # warn, never block, no model call
 /redpen:mode off      # silence
 raw: fix it           # skip redpen for this one prompt
 ```
@@ -134,6 +135,11 @@ shells out to `claude -p --model haiku`, which uses your normal auth but pays
 for CLI startup every time: ten to twenty seconds in practice. Either way, if
 the judge doesn't answer within 28 seconds the prompt goes through untouched.
 
+redpen always fails open. A timeout, a missing key or no network means your
+prompt is sent unreviewed rather than held, because a review tool that can lock
+you out of your editor is worse than no review tool. It says so once per session
+when that happens, so the quiet is never mistaken for approval.
+
 ## Modes
 
 ```
@@ -141,15 +147,32 @@ the judge doesn't answer within 28 seconds the prompt goes through untouched.
 /redpen:mode lite     # change it
 ```
 
-| mode | judge runs | on a thin prompt | model-fit check |
+| mode | judge runs | what happens | blocks? |
 |---|---|---|---|
 | `off` | never | nothing | no |
-| `lite` | never | one-line warning, prompt still goes through | no |
-| `full` | when the prefilter fires | blocks, waits for your `ok` | yes |
-| `ultra` | every prompt | blocks unless clearly actionable | yes |
+| `lite` | never | one-line warning, prompt goes through as typed | no |
+| `auto` | every prompt | a loose prompt is tightened and sent with the rewrite attached | no |
+| `full` | when the prefilter fires | shows the rewrite and waits for your `ok` | yes |
+| `ultra` | every prompt | as `full`, on everything | yes |
 
 `full` is the default. `lite` costs nothing and is the one to fall back to if
-the blocking gets annoying.
+the blocking gets annoying. `auto` is the one to pick if the correction is
+welcome but the second turn is not.
+
+**On `auto`.** It never stops you. When the judge finds a prompt whose intent
+was clear and whose wording was loose, it attaches a tightened version and lets
+the turn run. When it cannot rewrite one faithfully, it says what was missing
+and sends your words unchanged.
+
+Two things to know before turning it on. It reviews **every** prompt, because
+the prefilter is tuned to catch prompts too vague to rewrite, which is the
+opposite of what `auto` can use. So set `ANTHROPIC_API_KEY` first; without it
+every prompt waits ten to twenty seconds for the command-line judge.
+
+And a hook cannot replace your prompt text. The rewrite rides alongside what you
+typed rather than instead of it. That steers a loose prompt, because a loose
+prompt has nothing to contradict the rewrite, but it is an addition and not a
+substitution.
 
 The mode is global on the machine and persists across sessions. Set the starting
 mode with `REDPEN_MODE=lite` in your shell, or `{"defaultMode": "lite"}`
@@ -371,8 +394,15 @@ To ship an update, bump `version` in
 
 ## Known rough edges
 
-- **Two turns per correction.** Unavoidable while `UserPromptSubmit` has no way
-  to replace the prompt text.
+- **Two turns per correction**, in `full` and `ultra`. Unavoidable while
+  `UserPromptSubmit` has no way to replace the prompt text. `auto` trades the
+  second turn for not being asked.
+- **`auto` attaches, it does not substitute.** Your original words still reach
+  the model. On a loose prompt that is invisible; on a prompt that already says
+  something specific, your wording wins over the rewrite, which is the right
+  outcome but not always the obvious one.
+- **`auto` without an API key is slow**, because it reviews every prompt and the
+  command-line judge costs ten to twenty seconds each time.
 - **Latency on the CLI judge path.** Ten to twenty seconds, all of it CLI
   startup. Set an API key, or run in `lite`.
 - **The judge can be wrong about model fit.** It sees one prompt with no repo

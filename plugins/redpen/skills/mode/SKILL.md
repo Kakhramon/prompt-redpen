@@ -1,7 +1,7 @@
 ---
 name: mode
-description: Show or change the redpen mode (off, lite, full, ultra) or how it handles credentials (block, redact, warn, off). Use when the user asks about redpen's mode, wants it stricter or quieter, wants it turned off, or wants to change secret scanning.
-arguments: "[off|lite|full|ultra] | secrets [block|redact|warn|off]"
+description: Show or change the redpen mode (off, lite, auto, full, ultra) or how it handles credentials (block, redact, warn, off). Use when the user asks about redpen's mode, wants it stricter or quieter, wants it turned off, or wants to change secret scanning.
+arguments: "[off|lite|auto|full|ultra] | secrets [block|redact|warn|off]"
 allowed-tools: Bash(python3:*)
 disable-model-invocation: true
 ---
@@ -15,7 +15,7 @@ If the argument is empty, run:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/redpen.py" --mode
 ```
 
-If it names a mode (`off`, `lite`, `full` or `ultra`), run:
+If it names a mode (`off`, `lite`, `auto`, `full` or `ultra`), run:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/redpen.py" --set-mode <mode>
@@ -27,9 +27,13 @@ pick the closest mode and say which one you picked:
 | they want | mode |
 |---|---|
 | silence, no interruptions at all | `off` |
-| warnings but never blocked | `lite` |
+| warnings but never blocked, and no model call | `lite` |
+| corrections applied for them, never blocked | `auto` |
 | the normal behaviour back | `full` |
-| every prompt reviewed | `ultra` |
+| every prompt reviewed, and blocked | `ultra` |
+
+If they pick `auto`, mention once that it reviews every prompt, so it wants
+`ANTHROPIC_API_KEY` set or each prompt waits on the command-line judge.
 
 Then report the script's output in one or two lines. Don't add your own
 explanation of the modes on top of what the script prints.

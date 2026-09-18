@@ -7,7 +7,7 @@ Hook mode (no args, JSON on stdin)
 
 CLI subcommands (used by the bundled skills)
     --mode                 print the active mode and where it came from
-    --set-mode <mode>      off | lite | full | ultra
+    --set-mode <mode>      off | lite | auto | full | ultra
     --secrets              print how credentials are handled
     --set-secrets <mode>   block | redact | warn | off
     --scan "<text>"        list credentials found in text, and show it redacted
@@ -36,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import secret_scan  # noqa: E402
 
-MODES = ("off", "lite", "full", "ultra")
+MODES = ("off", "lite", "auto", "full", "ultra")
 DEFAULT_MODE = "full"
 
 # Credential handling runs independently of the redpen mode, including when the
@@ -238,6 +238,7 @@ def set_mode(mode):
 MODE_HELP = {
     "off": "Redpen does nothing. /redpen:validate-prompt still works on demand.",
     "lite": "Heuristics only, no model call, never blocks. Warns when a prompt looks thin.",
+    "auto": "Reviews every prompt, tightens the loose ones and sends them with the rewrite attached. Never blocks. Set ANTHROPIC_API_KEY first.",
     "full": "Reviews prompts that look thin or mismatched, and blocks for your approval.",
     "ultra": "Reviews every prompt and blocks unless it is clearly actionable.",
 }
@@ -594,6 +595,37 @@ def model_note_for(rec_model, rec_effort, cur_model, cur_effort, reason):
     return " ".join(bits)
 
 
+# A gap the judge left for the user to fill, as in "Fix the bug in [file/location]".
+# The lookbehind is what keeps real code out of it: a placeholder stands on its
+# own, while items[-1], argv[1] and Dict[str, int] all follow an identifier.
+PLACEHOLDER_RE = re.compile(
+    r"(?<![\w)\]])"
+    r"(\[[^\]\n]{2,60}\]|<[^<>\n]{2,60}>|\{\{?[^}\n]{2,60}\}\}?)")
+
+
+def _is_gap(inner):
+    """Two letters inside a standalone bracket is enough to refuse it.
+
+    The lookbehind already dropped subscripts and generics, so what reaches
+    here is a bracket sitting on its own in a sentence. Refusing one too many
+    only costs an attached rewrite; letting one through costs a real turn.
+    """
+    return bool(re.search(r"[A-Za-z]{2}", inner.strip("[]<>{} ")))
+
+
+def usable_rewrite(refined, original):
+    """Whether a rewrite is safe to send on the user's behalf, unreviewed.
+
+    The judge fills gaps it cannot close with placeholders, as in "Fix the bug
+    in [file/location]". Attaching that to a real turn is worse than attaching
+    nothing, so anything still carrying one is refused.
+    """
+    refined = (refined or "").strip()
+    if not refined or refined == (original or "").strip():
+        return False
+    return not any(_is_gap(m.group(1)) for m in PLACEHOLDER_RE.finditer(refined))
+
+
 def build_message(verdict, issues, refined, questions, model_note):
     lines = []
     if verdict == "clarify":
@@ -689,6 +721,35 @@ def emit(obj):
     sys.stdout.flush()
 
 
+def warn_judge_down(session):
+    """Say so once per session, then stay quiet.
+
+    Failing open silently is how a safety net rots: you stop noticing it never
+    fires. Failing open loudly on every prompt is worse. Once is the compromise.
+    """
+    flag = state_dir() / f"{safe_id(session)}.judge-down"
+    if flag.exists():
+        return
+    try:
+        flag.write_text(str(time.time()))
+    except Exception:
+        pass
+    if judge_available():
+        detail = (f"the judge did not answer within {CFG['judge_timeout']}s. "
+                  "Set ANTHROPIC_API_KEY for the fast path.")
+    else:
+        detail = ("no judge is reachable: set ANTHROPIC_API_KEY, or put `claude` "
+                  "on PATH.")
+    line = f"redpen is not reviewing prompts this session - {detail}"
+    emit({"systemMessage": f"\u26a0 {line}",
+          "hookSpecificOutput": {
+              "hookEventName": "UserPromptSubmit",
+              "additionalContext":
+                  f"Note for the user, tell them once at the start of your reply: "
+                  f"\u26a0 {line} Prompts are going through unreviewed until it "
+                  f"is reachable again."}})
+
+
 def emit_block(reason):
     """Erase the prompt and show `reason` to the user.
 
@@ -737,6 +798,38 @@ def handle_secrets(prompt, session):
                   f"False positive? --allow-secret {findings[0]['fingerprint']}"]
     emit_block("\n".join(lines))
     return True
+
+
+def send_with_rewrite(prompt, refined, verdict, issues, note, mode):
+    """auto mode: never block, attach the rewrite when there is a good one.
+
+    A hook cannot replace the prompt text, so the original still reaches Claude.
+    The rewrite rides alongside it as context, which steers a vague prompt
+    because a vague prompt has nothing to contradict it.
+    """
+    if verdict == "refine" and usable_rewrite(refined, prompt):
+        record({"event": "rewritten", "mode": mode, "issues": issues,
+                "original": prompt, "refined": refined})
+        bits = ["redpen rewrote that and sent it:", refined]
+        if note:
+            bits.append(note)
+        emit({"systemMessage": " ".join(bits),
+              "hookSpecificOutput": {
+                  "hookEventName": "UserPromptSubmit",
+                  "additionalContext":
+                      "The prompt gate reviewed the request above and found it "
+                      "loosely worded. Work from this clarified statement of the "
+                      "same request, which adds no requirements of its own:\n\n"
+                      + refined}})
+        return 0
+
+    # Nothing safe to attach: say what is wrong and get out of the way.
+    record({"event": "auto_passed", "mode": mode, "verdict": verdict,
+            "issues": issues, "original": prompt})
+    said = "; ".join(issues[:2]) or "this prompt looks thin"
+    tail = f" {note}" if note else ""
+    emit({"systemMessage": f"redpen: {said}. Sent as written.{tail}"})
+    return 0
 
 
 def hook():
@@ -800,7 +893,11 @@ def hook():
         # Carries no content of its own; the conversation is the content.
         return 0
     reason = worth_reviewing(prompt, model_name, effort, history)
-    if mode != "ultra" and not reason:
+    # auto reviews everything, like ultra. The prefilter selects for prompts too
+    # vague to rewrite faithfully, which is the opposite of what auto can use: a
+    # rewrite is only safe when intent was already clear and the wording was
+    # loose, and loose-but-clear prompts sail past the prefilter untouched.
+    if mode not in ("auto", "ultra") and not reason:
         return 0
 
     if mode == "lite":
@@ -812,7 +909,11 @@ def hook():
 
     verdict_data = judge(prompt, model_name, effort, cwd)
     if not verdict_data:
+        # Fail open, every time. A network hiccup must never cost you the
+        # ability to work. Say so once so the silence is not mistaken for a
+        # clean bill of health.
         record({"event": "judge_unavailable", "mode": mode})
+        warn_judge_down(session)
         return 0
 
     verdict = (verdict_data.get("verdict") or "ok").lower()
@@ -827,6 +928,10 @@ def hook():
     if verdict == "ok" and not note:
         record({"event": "passed", "mode": mode, "original": prompt})
         return 0
+
+    if mode == "auto":
+        return send_with_rewrite(prompt, refined, verdict, issues, note, mode)
+
     if not refined:
         refined = prompt
 
