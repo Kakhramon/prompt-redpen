@@ -312,6 +312,34 @@ def test_block_text_is_not_reviewed_again():
     assert redpen.BLOCK_MARKER in reason
 
 
+def test_the_judge_sees_the_previous_turn():
+    """A short prompt is only vague without what it replies to. Send both."""
+    seen = {}
+
+    def fake(user_msg):
+        seen["msg"] = user_msg
+        return '{"verdict": "ok"}'
+
+    real, redpen.judge_via_cli = redpen.judge_via_cli, fake
+    key = os.environ.pop("ANTHROPIC_API_KEY", None)
+    try:
+        redpen.judge("the other file too", "claude-sonnet-5", "high", "/tmp",
+                     "I renamed the flag in server.py; config.py uses it too.")
+    finally:
+        redpen.judge_via_cli = real
+        if key:
+            os.environ["ANTHROPIC_API_KEY"] = key
+    assert "<previous_turn>" in seen["msg"]
+    assert "config.py uses it too" in seen["msg"]
+
+    redpen.judge_via_cli = fake
+    try:
+        redpen.judge("fix it", "claude-sonnet-5", "high", "/tmp", "")
+    finally:
+        redpen.judge_via_cli = real
+    assert "<previous_turn>" not in seen["msg"]
+
+
 def test_answering_a_question():
     import tempfile
 

@@ -335,6 +335,20 @@ treated that way, so the transcript decides rather than the wording.
 Adding anything to one takes it out of that class: `continue` passes, `continue
 the refactor` gets reviewed like any other prompt.
 
+Anything the agent asked is answered freely: if the agent's last turn contained
+a question, your next prompt is not reviewed at all. An answer is thin by
+nature - "no, I do not own it" has no verb, no file and no scope - and blocking
+it buries the reply the agent was waiting for.
+
+Everything else that survives to the judge is sent with the agent's last turn
+attached, so a follow-up is judged as a follow-up. "The other file too" is a
+complete instruction after the turn that names the file, and the judge is told
+to read both and to never ask for what that turn already said.
+
+An "ok" verdict never blocks. If the model or effort looks wrong, redpen says
+so in a one-line notice and lets the prompt through; only a prompt the judge
+itself wants rewritten is worth erasing what you typed.
+
 Tune the regexes at the top of `scripts/redpen.py`:
 `VAGUE_RE`, `HEAVY_RE`, `TRIVIAL_RE`, `ANCHOR_RE`, `CONTINUE_RE`.
 

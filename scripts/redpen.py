@@ -53,6 +53,7 @@ CFG = {
     "tiers": {"haiku": 1, "sonnet": 2, "opus": 3, "fable": 4},
     "efforts": {"low": 1, "medium": 2, "high": 3, "xhigh": 4, "max": 5},
     "transcript_tail_bytes": 200_000,
+    "last_turn_chars": 2_000,
     "log_limit": 2000,
 }
 
@@ -145,6 +146,14 @@ Effort fit:
 - xhigh: the hardest reasoning.
 - Never recommend "max"; it overthinks with diminishing returns.
 - "any" when effort does not matter.
+
+When a previous_turn is given, the prompt is a reply inside a conversation,
+not a standalone request. Judge it as a reply: read it together with that turn
+and only flag what stays unclear once both are read. A prompt that the previous
+turn fully explains is "ok", however short it looks on its own - an answer to a
+question the agent asked, a go-ahead for work it just proposed, a "the other
+file too" that the turn names. Never ask for information the previous turn
+already gives.
 
 Be conservative. Terse but unambiguous is "ok". Only flag model or effort when
 the mismatch is obvious and costs real tokens."""
@@ -454,8 +463,41 @@ def session_has_history(transcript_path):
         return False
 
 
+def last_agent_turn(transcript_path):
+    """Text of the agent's last spoken turn, or "" when there is none.
+
+    Tool calls are skipped: they are not what the agent said to the user.
+    """
+    try:
+        path = Path(transcript_path)
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            if size > CFG["transcript_tail_bytes"]:
+                f.seek(size - CFG["transcript_tail_bytes"])
+            lines = f.read().splitlines()
+    except Exception:
+        return ""
+    for raw in reversed(lines):
+        try:
+            entry = json.loads(raw)
+        except Exception:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        content = (entry.get("message") or {}).get("content")
+        if isinstance(content, list):
+            text = " ".join(c.get("text", "") for c in content
+                            if isinstance(c, dict) and c.get("type") == "text")
+        else:
+            text = content if isinstance(content, str) else ""
+        text = text.strip()
+        if text:
+            return text
+    return ""
+
+
 def answering_a_question(transcript_path):
-    """True when the agent's last turn ended by asking the user something.
+    """True when the agent's last turn asked the user something.
 
     An answer is thin on its own and always will be: "no, I do not own it" has
     no verb, no file and no scope, and every heuristic here will call it vague.
@@ -471,33 +513,7 @@ def answering_a_question(transcript_path):
     straight after a question passes unreviewed, for one turn. Missing a review
     costs a turn; blocking an answer costs the answer.
     """
-    try:
-        path = Path(transcript_path)
-        size = path.stat().st_size
-        with open(path, "rb") as f:
-            if size > CFG["transcript_tail_bytes"]:
-                f.seek(size - CFG["transcript_tail_bytes"])
-            lines = f.read().splitlines()
-    except Exception:
-        return False
-    for raw in reversed(lines):
-        try:
-            entry = json.loads(raw)
-        except Exception:
-            continue
-        if entry.get("type") != "assistant":
-            continue
-        content = (entry.get("message") or {}).get("content")
-        if isinstance(content, list):
-            text = " ".join(c.get("text", "") for c in content
-                            if isinstance(c, dict) and c.get("type") == "text")
-        else:
-            text = content if isinstance(content, str) else ""
-        text = text.strip()
-        if not text:
-            continue  # a tool call, not the turn's last word
-        return "?" in text
-    return False
+    return "?" in last_agent_turn(transcript_path)
 
 
 def current_effort(model, cwd=None):
@@ -656,14 +672,22 @@ def judge_available():
     return bool(os.environ.get("ANTHROPIC_API_KEY") or shutil.which("claude"))
 
 
-def judge(prompt, model_name, effort, cwd):
+def judge(prompt, model_name, effort, cwd, last_turn=""):
     # Belt and braces: the hook already stops credential-bearing prompts, but
     # nothing reaches a judge model without passing through the scanner.
-    prompt = secret_scan.redact(prompt, state_dir(), load_config())
+    cfg, sdir = load_config(), state_dir()
+    prompt = secret_scan.redact(prompt, sdir, cfg)
     user_msg = (f"Working directory: {cwd}\n"
                 f"Model in use: {model_name or 'unknown'}\n"
-                f"Effort level: {effort or 'unknown'}\n\n"
-                f"Prompt to review:\n<prompt>\n{prompt}\n</prompt>")
+                f"Effort level: {effort or 'unknown'}\n\n")
+    if last_turn:
+        # The conversation is half the prompt. "Now do the same for auth.py" is
+        # a complete instruction after the turn that says what the same is, and
+        # gibberish without it. Redact it too - the agent quotes what you paste.
+        tail = secret_scan.redact(last_turn, sdir, cfg)[-CFG["last_turn_chars"]:]
+        user_msg += ("What the agent said last (the prompt is a reply to this):\n"
+                     f"<previous_turn>\n{tail}\n</previous_turn>\n\n")
+    user_msg += f"Prompt to review:\n<prompt>\n{prompt}\n</prompt>"
     try:
         raw = judge_via_api(user_msg) if os.environ.get("ANTHROPIC_API_KEY") \
             else judge_via_cli(user_msg)
@@ -1063,7 +1087,8 @@ def hook():
               f"/redpen:validate-prompt for a rewrite."})
         return 0
 
-    verdict_data = judge(prompt, model_name, effort, cwd)
+    verdict_data = judge(prompt, model_name, effort, cwd,
+                         last_agent_turn(data.get("transcript_path")))
     if not verdict_data:
         # Fail open, every time. A network hiccup must never cost you the
         # ability to work. Say so once so the silence is not mistaken for a
@@ -1081,8 +1106,14 @@ def hook():
                           model_name, effort,
                           (verdict_data.get("model_reason") or "").strip())
 
-    if verdict == "ok" and not note:
-        record({"event": "passed", "mode": mode, "original": prompt})
+    if verdict == "ok":
+        # The prompt is fine. Model or effort advice is worth saying and never
+        # worth a block: blocking erases what you typed, and you would be
+        # retyping a prompt the judge just approved.
+        record({"event": "passed", "mode": mode, "original": prompt,
+                "model_note": note})
+        if note:
+            emit({"systemMessage": f"redpen: {note}"})
         return 0
 
     if mode == "auto":
