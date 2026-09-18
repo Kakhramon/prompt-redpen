@@ -1,6 +1,6 @@
 ---
 name: analyze-chat
-description: Summarise what prompt-redpen has recorded, how many prompts were blocked, warned or passed, which issues keep recurring, and whether the model and effort level have matched the work. Use when the user asks how their prompting is going, what redpen has caught, or where they are wasting tokens.
+description: Summarise what redpen has recorded, how many prompts were blocked, warned or passed, which issues keep recurring, and whether the model and effort level have matched the work. Use when the user asks how their prompting is going, what redpen has caught, or where they are wasting tokens.
 arguments: "[how many decisions to read, default 50]"
 allowed-tools: Bash(python3:*)
 disable-model-invocation: true

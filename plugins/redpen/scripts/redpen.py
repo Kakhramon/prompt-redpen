@@ -57,7 +57,7 @@ CFG = {
 }
 
 BYPASS_PREFIX = "raw:"
-CONFIG_FILE = Path.home() / ".config" / "prompt-redpen" / "config.json"
+CONFIG_FILE = Path.home() / ".config" / "redpen" / "config.json"
 
 APPROVE_RE = re.compile(
     r"^\s*(y|yes|yep|yeah|ok|okay|k|go|go ahead|proceed|approve[d]?|"
@@ -135,7 +135,7 @@ the mismatch is obvious and costs real tokens."""
 # ----------------------------------------------------------------- paths ----
 
 def state_dir():
-    d = os.environ.get("CLAUDE_PLUGIN_DATA") or str(Path.home() / ".claude" / "prompt-redpen")
+    d = os.environ.get("CLAUDE_PLUGIN_DATA") or str(Path.home() / ".claude" / "redpen")
     p = Path(d)
     p.mkdir(parents=True, exist_ok=True)
     return p
@@ -167,7 +167,7 @@ def scrub(value):
 
 
 def log(msg):
-    if os.environ.get("PROMPT_REDPEN_DEBUG"):
+    if os.environ.get("REDPEN_DEBUG"):
         try:
             with open(state_dir() / "debug.log", "a") as f:
                 f.write(f"{time.strftime('%F %T')} {scrub(str(msg))}\n")
@@ -196,12 +196,12 @@ def resolve_mode():
     try:
         m = (state_dir() / "mode").read_text().strip().lower()
         if m in MODES:
-            return m, "set by /prompt-redpen:redpen-mode"
+            return m, "set by /redpen:mode"
     except Exception:
         pass
-    m = (os.environ.get("PROMPT_REDPEN_MODE") or "").strip().lower()
+    m = (os.environ.get("REDPEN_MODE") or "").strip().lower()
     if m in MODES:
-        return m, "$PROMPT_REDPEN_MODE"
+        return m, "$REDPEN_MODE"
     try:
         m = str(json.loads(CONFIG_FILE.read_text()).get("defaultMode", "")).lower()
         if m in MODES:
@@ -217,13 +217,13 @@ def set_mode(mode):
         print(f"Unknown mode {mode!r}. Valid modes: {', '.join(MODES)}")
         return 1
     (state_dir() / "mode").write_text(mode)
-    print(f"prompt-redpen mode is now: {mode}")
+    print(f"redpen mode is now: {mode}")
     print(MODE_HELP[mode])
     return 0
 
 
 MODE_HELP = {
-    "off": "Redpen does nothing. /prompt-redpen:validate-prompt still works on demand.",
+    "off": "Redpen does nothing. /redpen:validate-prompt still works on demand.",
     "lite": "Heuristics only, no model call, never blocks. Warns when a prompt looks thin.",
     "full": "Reviews prompts that look thin or mismatched, and blocks for your approval.",
     "ultra": "Reviews every prompt and blocks unless it is clearly actionable.",
@@ -244,12 +244,12 @@ def resolve_secrets_mode():
     try:
         m = (state_dir() / "secrets-mode").read_text().strip().lower()
         if m in SECRET_MODES:
-            return m, "set by /prompt-redpen:redpen-mode secrets"
+            return m, "set by /redpen:mode secrets"
     except Exception:
         pass
-    m = (os.environ.get("PROMPT_REDPEN_SECRETS") or "").strip().lower()
+    m = (os.environ.get("REDPEN_SECRETS") or "").strip().lower()
     if m in SECRET_MODES:
-        return m, "$PROMPT_REDPEN_SECRETS"
+        return m, "$REDPEN_SECRETS"
     m = str(load_config().get("secrets", "")).lower()
     if m in SECRET_MODES:
         return m, str(CONFIG_FILE)
@@ -513,7 +513,7 @@ def judge_via_cli(user_msg):
     exe = shutil.which("claude")
     if not exe:
         return None
-    env = dict(os.environ, PROMPT_REDPEN_MODE="off")  # stop the hook recursing
+    env = dict(os.environ, REDPEN_MODE="off")  # stop the hook recursing
     proc = subprocess.run(
         [exe, "-p", f"{JUDGE_SYSTEM}\n\n---\n\n{user_msg}",
          "--model", CFG["judge_model_cli"],
@@ -684,7 +684,7 @@ def handle_secrets(prompt, session):
 
     if sec_mode == "warn":
         emit({"systemMessage":
-              f"prompt-redpen: {len(findings)} credential(s) in that prompt ({names}) "
+              f"redpen: {len(findings)} credential(s) in that prompt ({names}) "
               f"- sent anyway because credential handling is set to warn."})
         return False  # caller continues; the raw prompt goes through
 
@@ -769,8 +769,8 @@ def hook():
     if mode == "lite":
         record({"event": "warned", "mode": mode, "why": reason, "original": prompt})
         emit({"systemMessage":
-              f"prompt-redpen: {reason or 'this prompt looks thin'}. "
-              f"/prompt-redpen:validate-prompt for a rewrite."})
+              f"redpen: {reason or 'this prompt looks thin'}. "
+              f"/redpen:validate-prompt for a rewrite."})
         return 0
 
     verdict_data = judge(prompt, model_name, effort, cwd)
@@ -809,7 +809,7 @@ def main(argv):
     if cmd == "--mode":
         mode, source = resolve_mode()
         sec, sec_source = resolve_secrets_mode()
-        print(f"prompt-redpen mode: {mode}  ({source})")
+        print(f"redpen mode: {mode}  ({source})")
         print(MODE_HELP[mode])
         print(f"\ncredential handling: {sec}  ({sec_source})")
         print(SECRET_HELP[sec])

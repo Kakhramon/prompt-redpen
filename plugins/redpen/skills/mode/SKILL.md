@@ -1,12 +1,12 @@
 ---
-name: redpen-mode
-description: Show or change the prompt-redpen mode (off, lite, full, ultra) or how it handles credentials (block, redact, warn, off). Use when the user asks about redpen's mode, wants it stricter or quieter, wants it turned off, or wants to change secret scanning.
+name: mode
+description: Show or change the redpen mode (off, lite, full, ultra) or how it handles credentials (block, redact, warn, off). Use when the user asks about redpen's mode, wants it stricter or quieter, wants it turned off, or wants to change secret scanning.
 arguments: "[off|lite|full|ultra] | secrets [block|redact|warn|off]"
 allowed-tools: Bash(python3:*)
 disable-model-invocation: true
 ---
 
-The user is checking or changing the prompt-redpen mode. Their argument, which may
+The user is checking or changing the redpen mode. Their argument, which may
 be empty: `$ARGUMENTS`
 
 If the argument is empty, run:

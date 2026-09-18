@@ -15,16 +15,16 @@ jobs:
           python-version: "3.8"
 
       - name: Compile the scripts
-        run: python -m compileall -q plugins/prompt-redpen/scripts
+        run: python -m compileall -q plugins/redpen/scripts
 
       - name: Self-check
-        run: python plugins/prompt-redpen/scripts/test_redpen.py
+        run: python plugins/redpen/scripts/test_redpen.py
 
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Validate the plugin
-        run: claude plugin validate ./plugins/prompt-redpen --strict
+        run: claude plugin validate ./plugins/redpen --strict
 
       - name: Validate the marketplace
         run: claude plugin validate . --strict

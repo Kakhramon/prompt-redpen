@@ -29,7 +29,7 @@ Report what the scanner printed. The findings are already masked; keep them that
 way. If it found nothing, say so in one line and mention that the scanner knows
 common credential formats plus high-entropy assignments, so an unusual in-house
 token format can slip past - those go in `extraSecretPatterns` in
-`~/.config/prompt-redpen/config.json`.
+`~/.config/redpen/config.json`.
 
 If the user says a finding is a false positive, allow it by its id, never by its
 value:

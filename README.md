@@ -1,4 +1,4 @@
-# prompt-redpen
+# redpen
 
 A Claude Code plugin that reads your prompt before Claude does.
 
@@ -29,23 +29,18 @@ or just retype it.
 ## Install
 
 ```
-/plugin marketplace add kakhramon/prompt-redpen
-/plugin install prompt-redpen@prompt-redpen
+/plugin marketplace add kakhramon/redpen
+/plugin install redpen@redpen
 ```
 
 Then start a new session. Run `/hooks` to see the one hook it registers, and
-`/prompt-redpen:redpen-mode` to see what it's doing.
-
-`hooks/hooks.json` is loaded automatically by its name alone. Do not also list
-it under `hooks` in the manifest, or it loads twice and the plugin fails with
-"Duplicate hooks file detected". `claude plugin validate` does not catch this;
-installing does.
+`/redpen:mode` to see what it's doing.
 
 Requires Python 3.8+ on `PATH` as `python3`. On Windows, change `python3` to
-`python` in `plugins/prompt-redpen/hooks/hooks.json`.
+`python` in `plugins/redpen/hooks/hooks.json`.
 
 The default mode blocks and waits. If you would rather be warned than stopped,
-run `/prompt-redpen:redpen-mode lite` once and it stays that way.
+run `/redpen:mode lite` once and it stays that way.
 
 **The judge.** Reviews are done by Haiku. With `ANTHROPIC_API_KEY` set, redpen
 calls the API directly, in about a second, billed to that key. Without it, it
@@ -56,8 +51,8 @@ the judge doesn't answer within 28 seconds the prompt goes through untouched.
 ## Modes
 
 ```
-/prompt-redpen:redpen-mode          # what's active now
-/prompt-redpen:redpen-mode lite     # change it
+/redpen:mode          # what's active now
+/redpen:mode lite     # change it
 ```
 
 | mode | judge runs | on a thin prompt | model-fit check |
@@ -71,18 +66,18 @@ the judge doesn't answer within 28 seconds the prompt goes through untouched.
 the blocking gets annoying.
 
 The mode is global on the machine and persists across sessions. Set the starting
-mode with `PROMPT_REDPEN_MODE=lite` in your shell, or `{"defaultMode": "lite"}`
-in `~/.config/prompt-redpen/config.json`. Precedence:
-`/prompt-redpen:redpen-mode` > env var > config file > `full`.
+mode with `REDPEN_MODE=lite` in your shell, or `{"defaultMode": "lite"}`
+in `~/.config/redpen/config.json`. Precedence:
+`/redpen:mode` > env var > config file > `full`.
 
 ## Commands
 
 | | |
 |---|---|
-| `/prompt-redpen:redpen-mode [mode]` | Show or change the mode |
-| `/prompt-redpen:validate-prompt <text>` | Review a prompt on demand, without sending it. Works in every mode, including `off` |
-| `/prompt-redpen:analyze-chat` | Review the session: what you asked, which prompts needed rework, whether the model fit the work |
-| `/prompt-redpen:check-secrets <text\|path>` | Scan text or a file for credentials and show it redacted |
+| `/redpen:mode [mode]` | Show or change the mode |
+| `/redpen:validate-prompt <text>` | Review a prompt on demand, without sending it. Works in every mode, including `off` |
+| `/redpen:analyze-chat` | Review the session: what you asked, which prompts needed rework, whether the model fit the work |
+| `/redpen:check-secrets <text\|path>` | Scan text or a file for credentials and show it redacted |
 
 ## What a good prompt looks like
 
@@ -164,13 +159,13 @@ Reply  ok  to send the redacted version. There is no option to send the original
 | `off` | No scanning |
 
 ```
-/prompt-redpen:redpen-mode secrets            # show current handling
-/prompt-redpen:redpen-mode secrets block      # change it
-/prompt-redpen:check-secrets ./deploy.sh      # scan something on demand
+/redpen:mode secrets            # show current handling
+/redpen:mode secrets block      # change it
+/redpen:check-secrets ./deploy.sh      # scan something on demand
 ```
 
-Set the default with `PROMPT_REDPEN_SECRETS=block` or `{"secrets": "block"}` in
-`~/.config/prompt-redpen/config.json`.
+Set the default with `REDPEN_SECRETS=block` or `{"secrets": "block"}` in
+`~/.config/redpen/config.json`.
 
 **What it catches:** AWS access keys, Anthropic / OpenAI / Google / Stripe /
 SendGrid / Twilio / npm / PyPI / HuggingFace keys, GitHub and GitLab tokens,
@@ -186,7 +181,7 @@ on every other prompt.
 **False positives** are allowlisted by fingerprint, never by value:
 
 ```
-/prompt-redpen:check-secrets ...     # prints an id next to each finding
+/redpen:check-secrets ...     # prints an id next to each finding
 python3 .../redpen.py --allow-secret 8648e9475bf83088
 ```
 
@@ -218,7 +213,7 @@ short with nothing concrete in it (no path, code, URL or identifier), or opens
 with a bare `fix` / `improve` / `it's broken`, or looks heavy while you're on a
 small model, or looks trivial while you're on a large one or at high effort.
 
-Tune the regexes at the top of `plugins/prompt-redpen/scripts/redpen.py`:
+Tune the regexes at the top of `plugins/redpen/scripts/redpen.py`:
 `VAGUE_RE`, `HEAVY_RE`, `TRIVIAL_RE`, `ANCHOR_RE`.
 
 ## Escape hatches
@@ -226,10 +221,10 @@ Tune the regexes at the top of `plugins/prompt-redpen/scripts/redpen.py`:
 | | |
 |---|---|
 | Skip one prompt | start it with `raw:` |
-| Turn it off for a shell session | `export PROMPT_REDPEN_MODE=off` |
-| Turn it off everywhere | `/prompt-redpen:redpen-mode off` |
-| Uninstall | `/plugin uninstall prompt-redpen@prompt-redpen` |
-| See what it's doing | `export PROMPT_REDPEN_DEBUG=1`, then read `debug.log` in the plugin data dir |
+| Turn it off for a shell session | `export REDPEN_MODE=off` |
+| Turn it off everywhere | `/redpen:mode off` |
+| Uninstall | `/plugin uninstall redpen@redpen` |
+| See what it's doing | `export REDPEN_DEBUG=1`, then read `debug.log` in the plugin data dir |
 
 `/`, `#` and `!` prefixed input always passes straight through.
 
@@ -253,23 +248,30 @@ directory. The effort level comes from your settings files, checking
 
 Every decision is appended to `decisions.jsonl` in the plugin's data directory
 (`${CLAUDE_PLUGIN_DATA}`, which survives plugin updates). Blocked prompts never
-reach the transcript, so that log is what `/prompt-redpen:analyze-chat` reads.
+reach the transcript, so that log is what `/redpen:analyze-chat` reads.
 
 ## Development
 
 ```
-claude plugin validate ./plugins/prompt-redpen --strict
-python3 plugins/prompt-redpen/scripts/test_redpen.py
-claude --plugin-dir ./plugins/prompt-redpen
+claude plugin validate ./plugins/redpen --strict
+python3 plugins/redpen/scripts/test_redpen.py
+claude --plugin-dir ./plugins/redpen
 ```
 
 `--plugin-dir` loads it for one session straight from the working copy, so you
 can iterate without installing. A GitHub Action runs the validator and the
 self-check on every push.
 
+One trap, if you fork this into a plugin of your own: `hooks/hooks.json` is
+loaded automatically by its name alone. Listing it under `hooks` in the manifest
+as well loads it twice, and the plugin refuses to start with "Duplicate hooks
+file detected". `claude plugin validate --strict` passes either way. Only
+installing it surfaces the problem, so install your own plugin once before you
+tell anyone about it.
+
 To ship an update, bump `version` in
-`plugins/prompt-redpen/.claude-plugin/plugin.json` and push. Users get it on
-`/plugin marketplace update prompt-redpen`.
+`plugins/redpen/.claude-plugin/plugin.json` and push. Users get it on
+`/plugin marketplace update redpen`.
 
 ## Known rough edges
 
