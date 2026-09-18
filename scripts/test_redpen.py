@@ -274,6 +274,78 @@ def test_cursor_translation():
     assert redpen.for_cursor({"systemMessage": "hi"}) is None
 
 
+def test_mode_survives_a_different_plugin_data_dir():
+    """The bug: mode was written under $CLAUDE_PLUGIN_DATA, so a mode set from a
+    skill landed somewhere the hook never read, and every prompt stayed blocked.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = Path(tmp) / "config.json"
+        old_cfg, old_env = redpen.CONFIG_FILE, os.environ.get("CLAUDE_PLUGIN_DATA")
+        redpen.CONFIG_FILE = cfg
+        try:
+            os.environ["CLAUDE_PLUGIN_DATA"] = tmp + "/a"
+            os.environ.pop("REDPEN_MODE", None)
+            redpen.set_mode("off")
+            # the hook runs with a different data dir than the command line did
+            os.environ["CLAUDE_PLUGIN_DATA"] = tmp + "/b"
+            mode, src = redpen.resolve_mode()
+            assert mode == "off", (mode, src)
+        finally:
+            redpen.CONFIG_FILE = old_cfg
+            if old_env is None:
+                os.environ.pop("CLAUDE_PLUGIN_DATA", None)
+            else:
+                os.environ["CLAUDE_PLUGIN_DATA"] = old_env
+
+
+def test_a_decline_may_say_why():
+    assert redpen.ORIGINAL_RE.match("no")
+    assert redpen.ORIGINAL_RE.match("no i do not own")
+    assert redpen.ORIGINAL_RE.match("nope, use mine")
+    assert not redpen.ORIGINAL_RE.match("normalize the config loader")
+    assert not redpen.ORIGINAL_RE.match("add a note to the README")
+
+
+def test_block_text_is_not_reviewed_again():
+    reason = redpen.build_message("clarify", ["too vague"], "do the thing", [], "")
+    assert redpen.BLOCK_MARKER in reason
+
+
+def test_answering_a_question():
+    import tempfile
+
+    def transcript(*turns):
+        f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+        for role, text in turns:
+            f.write(json.dumps({"type": role,
+                                "message": {"content": [{"type": "text",
+                                                         "text": text}]}}) + "\n")
+        f.close()
+        return f.name
+
+    asked = transcript(("user", "do the thing"),
+                       ("assistant", "Do you own github.com/Kahero?"))
+    assert redpen.answering_a_question(asked)
+
+    told = transcript(("user", "do the thing"),
+                      ("assistant", "Done. Pushed to main."))
+    assert not redpen.answering_a_question(told)
+
+    # a trailing tool call must not hide the question that came before it
+    f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+    f.write(json.dumps({"type": "assistant",
+                        "message": {"content": [{"type": "text",
+                                                 "text": "Which one?"}]}}) + "\n")
+    f.write(json.dumps({"type": "assistant",
+                        "message": {"content": [{"type": "tool_use",
+                                                 "name": "Bash"}]}}) + "\n")
+    f.close()
+    assert redpen.answering_a_question(f.name)
+
+    assert not redpen.answering_a_question("/nope/missing.jsonl")
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

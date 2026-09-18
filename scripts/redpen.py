@@ -62,8 +62,13 @@ CONFIG_FILE = Path.home() / ".config" / "redpen" / "config.json"
 APPROVE_RE = re.compile(
     r"^\s*(y|yes|yep|yeah|ok|okay|k|go|go ahead|proceed|approve[d]?|"
     r"do it|sure|send it|continue|1)\b[\s.!]*$", re.I)
+# A decline does not have to be a single word. "no i do not own that account" is
+# an answer to the agent, not a new prompt, and it must not be reviewed as one.
+# Appears in every block redpen writes. If it comes back in on stdin, the block
+# is being fed to us as a prompt and must not be reviewed again.
+BLOCK_MARKER = "This prompt is ambiguous. Before sending it:"
 ORIGINAL_RE = re.compile(
-    r"^\s*(n|no|nope|as[- ]is|use mine|keep mine|original|send mine|2)\b[\s.!]*$", re.I)
+    r"^\s*(n|no|nope|nah|as[- ]is|use mine|keep mine|original|send mine|2)\b", re.I)
 HEAVY_RE = re.compile(
     r"\b(architect\w*|design\s+(a|the|our)|refactor\w*|migrat\w*|root[- ]cause|"
     r"debug|race condition|concurren\w*|distributed|security (review|audit)|"
@@ -205,18 +210,31 @@ def record(entry):
 # ------------------------------------------------------------------ mode ----
 
 def resolve_mode():
-    """Returns (mode, source). First hit wins."""
-    try:
-        m = (state_dir() / "mode").read_text().strip().lower()
-        if m in MODES:
-            return m, "set by /redpen:mode"
-    except Exception:
-        pass
+    """Returns (mode, source). First hit wins.
+
+    The mode lives in the config file, at one fixed path. It used to live in the
+    plugin's data directory, which sounds right and is not: that path comes from
+    $CLAUDE_PLUGIN_DATA, so the hook and the command line get different
+    directories, and every mode you set from a skill was written somewhere the
+    hook never looked. The old location is still read, once, to migrate it.
+    """
     m = (os.environ.get("REDPEN_MODE") or "").strip().lower()
     if m in MODES:
         return m, "$REDPEN_MODE"
     try:
-        m = str(json.loads(CONFIG_FILE.read_text()).get("defaultMode", "")).lower()
+        m = str(load_config().get("mode", "")).lower()
+        if m in MODES:
+            return m, "set by /redpen:mode"
+    except Exception:
+        pass
+    try:
+        m = (state_dir() / "mode").read_text().strip().lower()
+        if m in MODES:
+            return m, "set by /redpen:mode (old location)"
+    except Exception:
+        pass
+    try:
+        m = str(load_config().get("defaultMode", "")).lower()
         if m in MODES:
             return m, str(CONFIG_FILE)
     except Exception:
@@ -224,12 +242,23 @@ def resolve_mode():
     return DEFAULT_MODE, "built-in default"
 
 
+def save_config(**changes):
+    cfg = load_config()
+    cfg.update(changes)
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(json.dumps(cfg, indent=2) + "\n")
+
+
 def set_mode(mode):
     mode = (mode or "").strip().lower().split()[0] if mode.strip() else ""
     if mode not in MODES:
         print(f"Unknown mode {mode!r}. Valid modes: {', '.join(MODES)}")
         return 1
-    (state_dir() / "mode").write_text(mode)
+    save_config(mode=mode)
+    try:  # so a stale copy cannot win the next lookup
+        (state_dir() / "mode").unlink()
+    except Exception:
+        pass
     print(f"redpen mode is now: {mode}")
     print(MODE_HELP[mode])
     return 0
@@ -423,6 +452,43 @@ def session_has_history(transcript_path):
             return bool(ASSISTANT_RE.search(f.read()))
     except Exception:
         return False
+
+
+def answering_a_question(transcript_path):
+    """True when the agent's last turn ended by asking the user something.
+
+    An answer is thin on its own and always will be: "no, I do not own it" has
+    no verb, no file and no scope, and every heuristic here will call it vague.
+    But the agent asked, so the context is the question, and reviewing the reply
+    is worse than useless - it buries the answer the agent was waiting for.
+    """
+    try:
+        path = Path(transcript_path)
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            if size > CFG["transcript_tail_bytes"]:
+                f.seek(size - CFG["transcript_tail_bytes"])
+            lines = f.read().splitlines()
+    except Exception:
+        return False
+    for raw in reversed(lines):
+        try:
+            entry = json.loads(raw)
+        except Exception:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        content = (entry.get("message") or {}).get("content")
+        if isinstance(content, list):
+            text = " ".join(c.get("text", "") for c in content
+                            if isinstance(c, dict) and c.get("type") == "text")
+        else:
+            text = content if isinstance(content, str) else ""
+        text = text.strip()
+        if not text:
+            continue  # a tool call, not the turn's last word
+        return text.endswith("?")
+    return False
 
 
 def current_effort(model, cwd=None):
@@ -650,7 +716,7 @@ def usable_rewrite(refined, original):
 def build_message(verdict, issues, refined, questions, model_note):
     lines = []
     if verdict == "clarify":
-        lines.append("This prompt is ambiguous. Before sending it:")
+        lines.append(BLOCK_MARKER)
     elif verdict == "refine":
         lines.append("This prompt can be tightened up first:")
     else:
@@ -967,9 +1033,15 @@ def hook():
         return 0
 
     # phase 1: review
+    # Redpen's own block text, pasted or echoed back in. Reviewing it starts a
+    # loop that reviews the review, and nothing in it is a request anyway.
+    if BLOCK_MARKER in prompt:
+        return 0
     history = session_has_history(data.get("transcript_path"))
     if history and CONTINUE_RE.match(prompt):
         # Carries no content of its own; the conversation is the content.
+        return 0
+    if history and answering_a_question(data.get("transcript_path")):
         return 0
     reason = worth_reviewing(prompt, model_name, effort, history)
     if not reason and not reviews_everything(mode):

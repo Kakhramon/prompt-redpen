@@ -1,6 +1,6 @@
 {
   "name": "redpen",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "A red pen for your prompts. Catches vague asks before they cost a turn, tells you when the task does not match the model or effort you are on, and refuses to let an API key reach the model.",
   "author": {
     "name": "kahero",

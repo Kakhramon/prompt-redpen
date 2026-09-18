@@ -467,13 +467,15 @@ Claude Code's; a fourth host is one branch in `emit`.
   context. The `/model` line is a nudge; redpen never switches models for you.
 - **A mid-session `/effort` or `/model` change is invisible** until it reaches a
   settings file or the transcript.
-- **Approval words are matched literally** (`ok`, `yes`, `go`, `proceed`).
-  Anything longer is treated as a fresh prompt, which is the safe default.
+- **Approval is matched literally** (`ok`, `yes`, `go`, `proceed`). A decline
+  may say why (`no, use mine because...`); an approval may not, because a long
+  reply starting with `ok` is usually a new prompt.
 - **The scanner is pattern-based.** It will miss a credential format it doesn't
   know and occasionally flag a long random-looking string that isn't one. Treat
   it as a seatbelt, not a guarantee.
-- **Mode is global, not per-session.** Changing it in one terminal changes it in
-  all of them.
+- **Mode is global, not per-session.** It lives in
+  `~/.config/redpen/config.json`, so changing it in one terminal changes it in
+  all of them, and on every host on the machine.
 - **Cursor cannot show a passing warning.** Its hook returns a message only
   when it stops the prompt, so `lite` has nothing to say there and `auto`
   cannot attach a rewrite. Use `full` on Cursor, or accept that it is quiet.
