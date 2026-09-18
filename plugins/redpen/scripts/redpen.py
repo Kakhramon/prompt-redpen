@@ -737,8 +737,62 @@ def cmd_report(limit):
 
 # ------------------------------------------------------------- hook mode ----
 
+# Which agent is calling us. Claude Code, Codex and Cursor all run a command on
+# stdin JSON at prompt-submit time, but each reads a different answer back, so
+# the whole script speaks Claude Code's shape and `emit` translates on the way
+# out. Adding a host means adding a branch there, not touching any call site.
+HOST = "claude"
+
+
+def detect_host(data):
+    """Tell the three apart by what they put on stdin.
+
+    Cursor sends only `prompt` and `attachments`. Codex sends the same envelope
+    as Claude Code plus `model` and `turn_id`, which Claude Code never sends.
+    """
+    if "session_id" not in data and "cwd" not in data:
+        return "cursor"
+    if "turn_id" in data or "model" in data:
+        return "codex"
+    return "claude"
+
+
+def for_codex(obj):
+    """Codex reads plain stdout as context; its JSON has no context field.
+
+    So anything carrying `additionalContext` goes out as text, with the
+    user-facing line folded in. Everything else is already Codex's own shape:
+    it reads the top-level `decision`/`reason` pair, and `systemMessage`.
+    """
+    ctx = (obj.get("hookSpecificOutput") or {}).get("additionalContext")
+    if ctx and "decision" not in obj:
+        said = obj.get("systemMessage")
+        return f"{said}\n\n{ctx}" if said else ctx
+    out = {k: v for k, v in obj.items() if k != "hookSpecificOutput"}
+    return out or None
+
+
+def for_cursor(obj):
+    """Cursor answers with `continue` and `user_message`, and nothing else.
+
+    A block translates exactly. A warning does not: Cursor shows `user_message`
+    only when the prompt is stopped, so a passing turn is silent there and
+    `lite` mode has nothing to say. Blocking to deliver a warning would be a
+    worse trade than losing it.
+    """
+    if obj.get("decision") == "block":
+        return {"continue": False, "user_message": obj.get("reason") or "Blocked."}
+    return None
+
+
 def emit(obj):
-    sys.stdout.write(json.dumps(obj))
+    if HOST == "codex":
+        obj = for_codex(obj)
+    elif HOST == "cursor":
+        obj = for_cursor(obj)
+    if obj is None:
+        return
+    sys.stdout.write(obj if isinstance(obj, str) else json.dumps(obj))
     sys.stdout.flush()
 
 
@@ -852,14 +906,20 @@ def send_with_rewrite(prompt, refined, verdict, issues, note, mode):
 
 
 def hook():
+    global HOST
     data = json.load(sys.stdin)
+    HOST = detect_host(data)
     prompt = (data.get("prompt") or "").strip()
+    # ponytail: Cursor sends no session id, so its pending approvals share one
+    # bucket per machine. Two Cursor windows mid-approval would cross. Give it a
+    # real key if that ever bites.
     session = data.get("session_id") or "nosession"
     cwd = data.get("cwd") or os.getcwd()
-    model_name = current_model(data.get("transcript_path"), cwd)
+    # Codex names the model on stdin. Only Claude Code makes us go and look.
+    model_name = data.get("model") or current_model(data.get("transcript_path"), cwd)
     effort = current_effort(model_name, cwd)
     mode, _ = resolve_mode()
-    log(f"stdin keys={sorted(data)} transcript={data.get('transcript_path')!r} "
+    log(f"host={HOST} stdin keys={sorted(data)} transcript={data.get('transcript_path')!r} "
         f"model={model_name!r} effort={effort!r} mode={mode}")
 
     # Credentials are checked first, in every redpen mode, and for slash commands

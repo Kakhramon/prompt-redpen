@@ -237,6 +237,43 @@ def test_block_payload():
     assert out["decision"] == "block" and out["reason"] == "because"
 
 
+def test_detect_host():
+    claude = {"session_id": "s", "cwd": "/x", "prompt": "hi",
+              "hook_event_name": "UserPromptSubmit", "prompt_id": "p"}
+    codex = {"session_id": "s", "cwd": "/x", "prompt": "hi",
+             "hook_event_name": "UserPromptSubmit", "model": "gpt-5",
+             "turn_id": "t"}
+    cursor = {"prompt": "hi", "attachments": []}
+    assert redpen.detect_host(claude) == "claude"
+    assert redpen.detect_host(codex) == "codex"
+    assert redpen.detect_host(cursor) == "cursor"
+
+
+def test_codex_translation():
+    block = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                    "decision": "block", "blockReason": "no"},
+             "decision": "block", "reason": "no"}
+    out = redpen.for_codex(block)
+    assert out == {"decision": "block", "reason": "no"}, out
+
+    ctx = {"systemMessage": "redpen: rewrote it.",
+           "hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                  "additionalContext": "Refined: do the thing"}}
+    out = redpen.for_codex(ctx)
+    assert isinstance(out, str) and "Refined: do the thing" in out
+    assert "redpen: rewrote it." in out
+
+    assert redpen.for_codex({"systemMessage": "hi"}) == {"systemMessage": "hi"}
+
+
+def test_cursor_translation():
+    block = {"decision": "block", "reason": "too vague"}
+    assert redpen.for_cursor(block) == {"continue": False,
+                                        "user_message": "too vague"}
+    # Cursor cannot show a message on a passing turn, so nothing goes out.
+    assert redpen.for_cursor({"systemMessage": "hi"}) is None
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

@@ -395,6 +395,43 @@ To ship an update, bump `version` in
 `plugins/redpen/.claude-plugin/plugin.json` and push. Users get it on
 `/plugin marketplace update prompt-redpen`.
 
+## Codex, Cursor, and other agents
+
+The hook is a script that reads JSON on stdin and answers on stdout, so it runs
+anywhere an agent will call one at prompt-submit time. Codex and Cursor both
+will. Install for either:
+
+```
+git clone https://github.com/Kakhramon/prompt-redpen
+prompt-redpen/hosts/install.sh codex     # or: cursor
+```
+
+That copies the two scripts to `~/.redpen/scripts` and writes the hook config.
+On Codex, run `/hooks` afterwards and trust it — Codex records trust against
+the hook's hash and skips anything it has not seen. On Cursor, restart the app.
+
+What differs per host:
+
+| | Claude Code | Codex | Cursor |
+|---|---|---|---|
+| Block and show the rewrite | yes | yes | yes |
+| Attach a rewrite to a passing prompt (`auto`) | yes | yes | no |
+| Warn without stopping (`lite`) | yes | yes | no |
+| Knows the active model | from the transcript | from the hook payload | no |
+| Slash commands | `/redpen:mode` | run the script directly | run the script directly |
+
+Cursor's prompt hook answers with `continue` and `user_message` and nothing
+else, and it shows the message only when it stops you, which is why the last
+two rows read `no`. Everything that blocks works identically everywhere.
+
+Modes, credential scanning and config are shared: one `~/.config/redpen/config.json`
+covers every host on the machine. Where there is no slash command, call the
+script: `python3 ~/.redpen/scripts/redpen.py --mode lite`.
+
+Anything else that runs a command on prompt submit should work untouched — the
+script recognises the host from the shape of what it is handed, and falls back
+to Claude Code's. If you wire up a fourth, the translation lives in one function.
+
 ## Known rough edges
 
 - **Two turns per correction**, in `full` and `ultra`. Unavoidable while
@@ -408,8 +445,6 @@ To ship an update, bump `version` in
   CLI startup rather than anything redpen does. It is why `full` reviews only
   what the prefilter flags, and why `auto` narrows to the same set unless the
   faster API path is available.
-- **Latency on the CLI judge path.** Ten to twenty seconds, all of it CLI
-  startup. Set an API key, or run in `lite`.
 - **The judge can be wrong about model fit.** It sees one prompt with no repo
   context. The `/model` line is a nudge; redpen never switches models for you.
 - **A mid-session `/effort` or `/model` change is invisible** until it reaches a
@@ -421,5 +456,10 @@ To ship an update, bump `version` in
   it as a seatbelt, not a guarantee.
 - **Mode is global, not per-session.** Changing it in one terminal changes it in
   all of them.
+- **Cursor cannot show a passing warning.** Its hook returns a message only
+  when it stops the prompt, so `lite` has nothing to say there and `auto`
+  cannot attach a rewrite. Use `full` on Cursor, or accept that it is quiet.
+- **Cursor sends no session id**, so pending approvals share one bucket per
+  machine. Two Cursor windows mid-approval would cross.
 
 MIT licensed.

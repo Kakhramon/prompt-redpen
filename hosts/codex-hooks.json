@@ -1,0 +1,18 @@
+{
+  "description": "redpen: review the prompt before Codex acts on it",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.redpen/scripts/redpen.py",
+            "statusMessage": "Reviewing your prompt...",
+            "timeout": 35,
+            "additionalContextLimit": 4000
+          }
+        ]
+      }
+    ]
+  }
+}
