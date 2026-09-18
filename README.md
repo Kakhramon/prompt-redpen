@@ -62,6 +62,32 @@ or just retype it.
 
 Nothing was sent. The turn has not started yet.
 
+## Numbers
+
+Measured, not estimated. A headless agent in a small sample repo, five vague
+prompts, two repetitions each, ten runs per arm. Every figure is the
+`total_cost_usd` the CLI itself reported.
+
+| | mean cost | mean wall |
+|---|--:|--:|
+| letting Sonnet guess at a vague prompt | $0.1913 | 47s |
+| redpen catching the same prompt on Haiku | $0.0302 | 9s |
+
+Catching costs **16%** of guessing and takes **19%** as long.
+
+| one mechanical edit | mean cost |
+|---|--:|
+| on Opus | $0.2698 |
+| on Haiku | $0.0352 |
+
+Same finished edit, **7.7x** the price. That gap is what the `/model` nudge is
+for.
+
+Read the caveats before quoting these: a guess is not always waste, a caught
+prompt still has to be re-sent and paid for, and the sample is small.
+[Full writeup](benchmarks/results-2026-09-18.md) &middot;
+reproduce with `python3 benchmarks/run.py --reps 2`.
+
 ## Install
 
 ```

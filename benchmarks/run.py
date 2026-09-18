@@ -114,7 +114,15 @@ def main():
                     help="the model a developer is assumed to be working on")
     ap.add_argument("--big", default="opus", help="oversized tier for arm 2")
     ap.add_argument("--small", default="haiku", help="right-sized tier for arm 2")
+    ap.add_argument("--from", dest="src",
+                    help="rebuild the markdown from a saved results json")
     args = ap.parse_args()
+
+    if args.src:
+        runs = json.loads(Path(args.src).read_text())
+        stamp = Path(args.src).stem.replace("results-", "")
+        print(f"wrote {write_report(runs, args, stamp)}")
+        return
 
     runs = {"arm1_guess": [], "arm1_catch": [], "arm2_big": [], "arm2_small": []}
 
@@ -140,37 +148,59 @@ def main():
 
     stamp = time.strftime("%Y-%m-%d")
     (ROOT / f"results-{stamp}.json").write_text(json.dumps(runs, indent=2))
+    out = write_report(runs, args, stamp)
+    print(f"\nwrote {out}")
 
+
+def write_report(runs, args, stamp):
     g, c = mean(runs["arm1_guess"], "cost_usd"), mean(runs["arm1_catch"], "cost_usd")
     b, s = mean(runs["arm2_big"], "cost_usd"), mean(runs["arm2_small"], "cost_usd")
-    lines = [
-        f"# redpen benchmark, {stamp}", "",
-        f"`python3 benchmarks/run.py --reps {args.reps}`. "
-        f"{len(VAGUE)} vague prompts, {args.reps} rep(s) each, on a small sample repo. "
-        "Every figure is `total_cost_usd` as the CLI reported it.", "",
-        "## Arm 1: what a vague prompt costs", "",
-        f"| | mean cost | mean wall |", "|---|--:|--:|",
-        f"| letting `{args.model}` guess at it | ${g:.4f} | {mean(runs['arm1_guess'], 'wall_s'):.1f}s |" if g else "",
-        f"| redpen catching it on {JUDGE_MODEL} | ${c:.4f} | {mean(runs['arm1_catch'], 'wall_s'):.1f}s |" if c else "",
+    gw, cw = mean(runs["arm1_guess"], "wall_s"), mean(runs["arm1_catch"], "wall_s")
+    n = len(runs["arm1_guess"])
+    L = [
+        f"# redpen benchmark, {stamp}",
         "",
-        f"Catching costs {c / g * 100:.0f}% of guessing." if g and c else "",
-        "", "## Arm 2: what the wrong tier costs", "",
-        "| model | mean cost |", "|---|--:|",
-        f"| {args.big} | ${b:.4f} |" if b else "",
-        f"| {args.small} | ${s:.4f} |" if s else "",
+        f"`python3 benchmarks/run.py --reps {args.reps}`. {len(VAGUE)} vague prompts, "
+        f"{args.reps} rep(s) each, {n} runs per arm, on a small sample repo. Every "
+        "figure is `total_cost_usd` as the CLI reported it. Raw runs are in the "
+        "matching `.json`.",
         "",
-        f"Same finished edit, {b / s:.1f}x the price." if b and s else "",
-        "", "## What this does not show", "",
+        "## Arm 1: what a vague prompt costs",
+        "",
+        "| | mean cost | mean wall |",
+        "|---|--:|--:|",
+        f"| letting `{args.model}` guess at it | ${g:.4f} | {gw:.0f}s |",
+        f"| redpen catching it on `{JUDGE_MODEL}` | ${c:.4f} | {cw:.0f}s |",
+        "",
+        f"Catching costs **{c / g * 100:.0f}%** of guessing, and takes "
+        f"**{cw / gw * 100:.0f}%** as long.",
+        "",
+        "## Arm 2: what the wrong tier costs",
+        "",
+        "| model | mean cost |",
+        "|---|--:|",
+        f"| `{args.big}` | ${b:.4f} |",
+        f"| `{args.small}` | ${s:.4f} |",
+        "",
+        f"Same finished edit, **{b / s:.1f}x** the price.",
+        "",
+        "## What this does not show",
+        "",
         "Arm 1 measures the first pass only. A guess is not always waste, and a",
-        "caught prompt still has to be re-sent and paid for. The saving is the",
-        "wasted exploration, not the task.", "",
-        "Arm 2 assumes the small model finishes the task correctly. Check the",
-        "diffs before believing the ratio.", "",
-        f"Sample is small: {args.reps} rep(s). Treat these as an order of magnitude.",
+        "caught prompt still has to be re-sent and paid for. What is saved is the",
+        "wasted exploration, not the task.",
+        "",
+        "Arm 2 assumes the small model finishes the task correctly. Read the diffs",
+        "before believing the ratio.",
+        "",
+        f"The sample is small, {args.reps} repetition(s) over {len(VAGUE)} prompts on",
+        "one tiny repo. Treat these as an order of magnitude, not a measurement of",
+        "your codebase.",
+        "",
     ]
     out = ROOT / f"results-{stamp}.md"
-    out.write_text("\n".join(l for l in lines if l != "") + "\n")
-    print(f"\nwrote {out}")
+    out.write_text("\n".join(L))
+    return out
 
 
 if __name__ == "__main__":
