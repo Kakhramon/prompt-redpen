@@ -1,6 +1,6 @@
 {
   "name": "prompt-redpen",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A red pen for your prompts. Catches vague asks before they cost a turn, tells you when the task does not match the model or effort you are on, and refuses to let an API key reach the model.",
   "author": {
     "name": "kahero",
@@ -9,6 +9,12 @@
   "homepage": "https://github.com/kakhramon/prompt-redpen",
   "repository": "https://github.com/kakhramon/prompt-redpen",
   "license": "MIT",
-  "keywords": ["prompt", "tokens", "cost", "model-selection", "secrets", "hooks"],
-  "hooks": "./hooks/hooks.json"
+  "keywords": [
+    "prompt",
+    "tokens",
+    "cost",
+    "model-selection",
+    "secrets",
+    "hooks"
+  ]
 }

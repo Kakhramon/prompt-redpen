@@ -36,6 +36,11 @@ or just retype it.
 Then start a new session. Run `/hooks` to see the one hook it registers, and
 `/prompt-redpen:redpen-mode` to see what it's doing.
 
+`hooks/hooks.json` is loaded automatically by its name alone. Do not also list
+it under `hooks` in the manifest, or it loads twice and the plugin fails with
+"Duplicate hooks file detected". `claude plugin validate` does not catch this;
+installing does.
+
 Requires Python 3.8+ on `PATH` as `python3`. On Windows, change `python3` to
 `python` in `plugins/prompt-redpen/hooks/hooks.json`.
 
