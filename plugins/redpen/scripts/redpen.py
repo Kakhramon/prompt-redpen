@@ -428,7 +428,7 @@ def session_has_history(transcript_path):
 def current_effort(model, cwd=None):
     """Per-model effort wins over the global one.
 
-    # ponytail: settings files only. A mid-session /effort switch is invisible
+    # Known ceiling: settings files only. A mid-session /effort switch is invisible
     # to hooks; add a PostModelSwitch hook if that ever starts mattering.
     """
     env = (os.environ.get("CLAUDE_EFFORT") or "").strip().lower()
@@ -910,7 +910,7 @@ def hook():
     data = json.load(sys.stdin)
     HOST = detect_host(data)
     prompt = (data.get("prompt") or "").strip()
-    # ponytail: Cursor sends no session id, so its pending approvals share one
+    # Known ceiling: Cursor sends no session id, so its pending approvals share one
     # bucket per machine. Two Cursor windows mid-approval would cross. Give it a
     # real key if that ever bites.
     session = data.get("session_id") or "nosession"

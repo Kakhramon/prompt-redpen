@@ -398,17 +398,30 @@ To ship an update, bump `version` in
 ## Codex, Cursor, and other agents
 
 The hook is a script that reads JSON on stdin and answers on stdout, so it runs
-anywhere an agent will call one at prompt-submit time. Codex and Cursor both
-will. Install for either:
+anywhere an agent calls one at prompt-submit time.
+
+**Codex** installs it as a plugin, the same way Claude Code does:
 
 ```
-git clone https://github.com/Kakhramon/prompt-redpen
-prompt-redpen/hosts/install.sh codex     # or: cursor
+codex plugin marketplace add kakhramon/prompt-redpen
+codex plugin install redpen
 ```
 
-That copies the two scripts to `~/.redpen/scripts` and writes the hook config.
-On Codex, run `/hooks` afterwards and trust it — Codex records trust against
-the hook's hash and skips anything it has not seen. On Cursor, restart the app.
+Codex reads `.codex-plugin/plugin.json` and reuses the same `hooks/hooks.json`,
+since `${CLAUDE_PLUGIN_ROOT}` is one of the variables it still honours. Start a
+new session afterwards, then run `/hooks` and trust it: Codex records trust
+against the hook's hash and skips anything it has not seen before.
+
+**Cursor** has no plugin system, so the hook is registered by hand:
+
+```
+git clone https://github.com/kakhramon/prompt-redpen
+prompt-redpen/plugins/redpen/scripts/install-cursor.sh
+```
+
+That writes `~/.cursor/hooks.json` pointing at the clone. Pass a project path to
+scope it to one repo instead. It refuses to overwrite an existing `hooks.json`
+and prints the block to merge. Restart Cursor afterwards.
 
 What differs per host:
 
@@ -418,19 +431,19 @@ What differs per host:
 | Attach a rewrite to a passing prompt (`auto`) | yes | yes | no |
 | Warn without stopping (`lite`) | yes | yes | no |
 | Knows the active model | from the transcript | from the hook payload | no |
-| Slash commands | `/redpen:mode` | run the script directly | run the script directly |
+| Skills | `/redpen:mode` | `/redpen:mode` | run the script directly |
 
 Cursor's prompt hook answers with `continue` and `user_message` and nothing
 else, and it shows the message only when it stops you, which is why the last
-two rows read `no`. Everything that blocks works identically everywhere.
+three rows read `no`. Everything that blocks works identically everywhere.
 
-Modes, credential scanning and config are shared: one `~/.config/redpen/config.json`
-covers every host on the machine. Where there is no slash command, call the
-script: `python3 ~/.redpen/scripts/redpen.py --mode lite`.
+Modes, credential scanning and config are shared: one
+`~/.config/redpen/config.json` covers every host on the machine. Where there is
+no skill, call the script: `python3 .../scripts/redpen.py --mode lite`.
 
-Anything else that runs a command on prompt submit should work untouched — the
-script recognises the host from the shape of what it is handed, and falls back
-to Claude Code's. If you wire up a fourth, the translation lives in one function.
+Anything else that runs a command on prompt submit should work untouched. The
+script recognises the host from the shape of what it is handed and falls back to
+Claude Code's; a fourth host is one branch in `emit`.
 
 ## Known rough edges
 

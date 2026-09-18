@@ -1,0 +1,35 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "redpen",
+  "version": "0.5.0",
+  "description": "A red pen for your prompts. Catches vague asks before they cost a turn, tells you when the task does not match the model or effort you are on, and refuses to let an API key reach the model.",
+  "author": {
+    "name": "kahero",
+    "url": "https://github.com/kakhramon"
+  },
+  "homepage": "https://github.com/kakhramon/prompt-redpen",
+  "repository": "https://github.com/kakhramon/prompt-redpen",
+  "license": "MIT",
+  "keywords": ["prompt", "tokens", "cost", "model-selection", "secrets", "hooks"],
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/hooks.json",
+      "skills": "./skills/",
+      "interface": {
+        "displayName": "redpen",
+        "shortDescription": "Marks up your prompt before the model reads it",
+        "longDescription": "Reviews every prompt at submit time. Rewrites the vague ones and shows you the rewrite before it is sent, says when the task does not match the model or effort level you are on, and stops a credential from reaching the model.",
+        "developerName": "kahero",
+        "category": "Productivity",
+        "capabilities": ["Lifecycle hooks", "Skills"],
+        "websiteURL": "https://github.com/kakhramon/prompt-redpen",
+        "defaultPrompt": [
+          "Set redpen to lite mode.",
+          "Review this prompt before I send it.",
+          "Check my last prompt for credentials."
+        ],
+        "brandColor": "#c0392b"
+      }
+    }
+  }
+}

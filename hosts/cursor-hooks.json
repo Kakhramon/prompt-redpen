@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "hooks": {
-    "beforeSubmitPrompt": [
-      { "command": "python3 ~/.redpen/scripts/redpen.py" }
-    ]
-  }
-}

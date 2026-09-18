@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "python3 \"REDPEN_DIR/scripts/redpen.py\"",
+        "timeout": 35
+      }
+    ]
+  }
+}

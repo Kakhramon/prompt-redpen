@@ -1,0 +1,20 @@
+{
+  "name": "prompt-redpen",
+  "interface": {
+    "displayName": "redpen"
+  },
+  "plugins": [
+    {
+      "name": "redpen",
+      "source": {
+        "source": "local",
+        "path": "./plugins/redpen"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
