@@ -34,6 +34,14 @@ def test_prefilter():
                  "claude-sonnet-5", "medium")
 
 
+def test_transcript_for_cwd():
+    """The CLI subcommands rebuild the project directory from the cwd."""
+    got = redpen.transcript_for_cwd("/Users/someone/Projects/my-app")
+    assert got.parent.name == "-Users-someone-Projects-my-app", got
+    assert got.parent.parent == Path.home() / ".claude" / "projects"
+    assert redpen.transcript_for_cwd("/tmp/a.b").parent.name.endswith("a-b"), "dots become dashes"
+
+
 def test_model_fit():
     """Concrete prompts, so the vagueness checks stay out of the way."""
     w = redpen.worth_reviewing
@@ -60,9 +68,21 @@ def test_model_from_transcript():
         t = Path(d) / "transcript.jsonl"
         t.write_text(
             json.dumps({"type": "assistant", "message": {"model": "claude-sonnet-5"}}) + "\n"
-            + json.dumps({"type": "assistant", "message": {"model": "claude-opus-5[1m]"}}) + "\n")
-        assert redpen.current_model(str(t), d) == "claude-opus-5", "last model wins"
-        assert redpen.current_model("/nope/missing.jsonl", d) == "", "missing file is not fatal"
+            + json.dumps({"type": "assistant", "message": {"model": "claude-opus-5[1m]"}}) + "\n"
+            + json.dumps({"type": "assistant", "message": {"model": "<synthetic>"}}) + "\n")
+        assert redpen.current_model(str(t), d) == "claude-opus-5", \
+            "last real model wins, <synthetic> is skipped"
+
+        # First prompt of a session: the named transcript does not exist yet, so
+        # the newest sibling in the same directory answers instead.
+        fresh = Path(d) / "brand-new.jsonl"
+        assert redpen.current_model(str(fresh), d) == "claude-opus-5", "falls back to a sibling"
+
+    os.environ.pop("ANTHROPIC_MODEL", None)
+    with tempfile.TemporaryDirectory() as empty:
+        assert redpen.current_model(str(Path(empty) / "x.jsonl"), empty) == "", \
+            "nothing to read is not fatal"
+        assert redpen.current_model(None, empty) == ""
 
 
 def test_effort_from_settings():

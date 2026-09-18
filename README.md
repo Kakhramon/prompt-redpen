@@ -40,10 +40,10 @@ Requires Python 3.8+ on `PATH` as `python3`. On Windows, change `python3` to
 `python` in `plugins/prompt-redpen/hooks/hooks.json`.
 
 **The judge.** Reviews are done by Haiku. With `ANTHROPIC_API_KEY` set, redpen
-calls the API directly (about a second, billed to that key). Without it, it
-shells out to `claude -p --model haiku`, which uses your normal auth but adds a
-few seconds of CLI startup. Either way, if the judge is unreachable the prompt
-goes through untouched.
+calls the API directly, in about a second, billed to that key. Without it, it
+shells out to `claude -p --model haiku`, which uses your normal auth but pays
+for CLI startup every time: ten to twenty seconds in practice. Either way, if
+the judge doesn't answer within 28 seconds the prompt goes through untouched.
 
 ## Modes
 
@@ -237,10 +237,11 @@ that injection is what Claude actually works from.
 
 `UserPromptSubmit` isn't told which model or effort level is active, and there's
 no environment variable for either. Redpen reads the model from the tail of the
-session transcript, whose assistant lines each carry one, and the effort level
-from your settings files, checking `modelSettings.<model>.effortLevel` before
-the global `effortLevel`. A `/effort` switch made mid-session and never written
-to settings is the one case it can't see.
+session transcript, whose assistant lines each carry one. On the first prompt of
+a session that file doesn't exist yet, so it falls back to the newest other
+transcript in the same project, which is the previous session in the same
+directory. The effort level comes from your settings files, checking
+`modelSettings.<model>.effortLevel` before the global `effortLevel`.
 
 Every decision is appended to `decisions.jsonl` in the plugin's data directory
 (`${CLAUDE_PLUGIN_DATA}`, which survives plugin updates). Blocked prompts never
@@ -266,12 +267,12 @@ To ship an update, bump `version` in
 
 - **Two turns per correction.** Unavoidable while `UserPromptSubmit` has no way
   to replace the prompt text.
-- **Latency on the CLI judge path.** About nine seconds. Set an API key, or run
-  in `lite`.
+- **Latency on the CLI judge path.** Ten to twenty seconds, all of it CLI
+  startup. Set an API key, or run in `lite`.
 - **The judge can be wrong about model fit.** It sees one prompt with no repo
   context. The `/model` line is a nudge; redpen never switches models for you.
-- **A mid-session `/effort` change is invisible** unless it's written to a
-  settings file.
+- **A mid-session `/effort` or `/model` change is invisible** until it reaches a
+  settings file or the transcript.
 - **Approval words are matched literally** (`ok`, `yes`, `go`, `proceed`).
   Anything longer is treated as a fresh prompt, which is the safe default.
 - **The scanner is pattern-based.** It will miss a credential format it doesn't

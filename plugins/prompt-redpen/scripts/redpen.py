@@ -48,7 +48,7 @@ DEFAULT_SECRET_MODE = "redact"
 CFG = {
     "judge_model_cli": "haiku",
     "judge_model_api": "claude-haiku-4-5-20251001",
-    "judge_timeout": 18,
+    "judge_timeout": 28,  # the CLI path spends most of this on startup
     "state_ttl": 60 * 45,
     "tiers": {"haiku": 1, "sonnet": 2, "opus": 3, "fable": 4},
     "efforts": {"low": 1, "medium": 2, "high": 3, "xhigh": 4, "max": 5},
@@ -333,20 +333,62 @@ def normalise_model(name):
     return re.sub(r"\[[^\]]*\]", "", (name or "")).strip().lower()
 
 
-def current_model(transcript_path, cwd=None):
-    """Last model seen in the transcript, else the configured one."""
+def model_in_transcript(path):
+    """Last real model named in a transcript's tail, or "" if there is none."""
     try:
-        path = Path(transcript_path)
         size = path.stat().st_size
         with open(path, "rb") as f:
             if size > CFG["transcript_tail_bytes"]:
                 f.seek(size - CFG["transcript_tail_bytes"])
             tail = f.read().decode("utf-8", errors="replace")
-        matches = MODEL_RE.findall(tail)
-        if matches:
-            return normalise_model(matches[-1])
     except Exception as e:
-        log(f"model from transcript failed: {e}")
+        log(f"cannot read {path}: {e}")
+        return ""
+    for name in reversed(MODEL_RE.findall(tail)):
+        # <synthetic> marks a message Claude Code generated itself.
+        if not name.startswith("<"):
+            return normalise_model(name)
+    return ""
+
+
+def transcript_for_cwd(cwd):
+    """Where Claude Code keeps this directory's transcripts.
+
+    The CLI subcommands are not given a transcript path the way the hook is, so
+    they reconstruct the project directory from the working directory: Claude
+    Code names it after the absolute path with every separator turned into a
+    dash.
+    """
+    try:
+        slug = re.sub(r"[^A-Za-z0-9]", "-", str(Path(cwd or ".").resolve()))
+        return Path.home() / ".claude" / "projects" / slug / "latest.jsonl"
+    except Exception:
+        return None
+
+
+def current_model(transcript_path, cwd=None):
+    """The model in use, from the transcript, the environment or the settings.
+
+    On the first prompt of a session the named transcript does not exist yet,
+    because nothing has been written to it. The newest other transcript in the
+    same project directory is the previous session in this same project, which
+    is the best available guess at the model still in use.
+    """
+    path = Path(transcript_path) if transcript_path else None
+    if path and path.exists():
+        found = model_in_transcript(path)
+        if found:
+            return found
+    if path:
+        try:
+            siblings = sorted((f for f in path.parent.glob("*.jsonl") if f != path),
+                              key=lambda f: f.stat().st_mtime, reverse=True)
+        except Exception:
+            siblings = []
+        for sibling in siblings[:3]:
+            found = model_in_transcript(sibling)
+            if found:
+                return found
     env = normalise_model(os.environ.get("ANTHROPIC_MODEL", ""))
     return env or normalise_model(merged_settings(cwd).get("model", ""))
 
@@ -480,6 +522,10 @@ def judge_via_cli(user_msg):
     return proc.stdout
 
 
+def judge_available():
+    return bool(os.environ.get("ANTHROPIC_API_KEY") or shutil.which("claude"))
+
+
 def judge(prompt, model_name, effort, cwd):
     # Belt and braces: the hook already stops credential-bearing prompts, but
     # nothing reaches a judge model without passing through the scanner.
@@ -547,12 +593,15 @@ def cmd_review(text):
         return 0
     mode, source = resolve_mode()
     cwd = os.getcwd()
-    model_name = current_model(os.environ.get("CLAUDE_TRANSCRIPT_PATH"), cwd)
+    model_name = current_model(transcript_for_cwd(cwd), cwd)
     effort = current_effort(model_name, cwd)
     verdict_data = judge(text, model_name, effort, cwd)
     if not verdict_data:
-        print("The judge is unavailable (no ANTHROPIC_API_KEY and no `claude` on PATH, "
-              "or the call timed out). Nothing to report.")
+        if judge_available():
+            print(f"The judge did not answer within {CFG['judge_timeout']}s. "
+                  "Set ANTHROPIC_API_KEY to use the fast path, or try again.")
+        else:
+            print("No judge available: set ANTHROPIC_API_KEY, or put `claude` on PATH.")
         return 0
     print(f"verdict: {verdict_data.get('verdict', '?')}   (redpen mode: {mode})")
     for i in verdict_data.get("issues") or []:
@@ -592,7 +641,7 @@ def cmd_report(limit):
                 continue
             print(json.dumps({k: v for k, v in e.items() if k != "refined"}))
     cwd = os.getcwd()
-    model_name = current_model(os.environ.get("CLAUDE_TRANSCRIPT_PATH"), cwd)
+    model_name = current_model(transcript_for_cwd(cwd), cwd)
     effort = current_effort(model_name, cwd)
     print("\ncurrent setup:")
     print(f"  model: {model_name or 'unknown'}")
@@ -665,6 +714,8 @@ def hook():
     model_name = current_model(data.get("transcript_path"), cwd)
     effort = current_effort(model_name, cwd)
     mode, _ = resolve_mode()
+    log(f"stdin keys={sorted(data)} transcript={data.get('transcript_path')!r} "
+        f"model={model_name!r} effort={effort!r} mode={mode}")
 
     # Credentials are checked first, in every redpen mode, and for slash commands
     # and raw: prompts too. Everything below this line may send text to a model.
